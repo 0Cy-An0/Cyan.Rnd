@@ -5,6 +5,7 @@ using RoR2;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.UIElements;
 
 namespace An_Rnd
 {
@@ -73,7 +74,6 @@ namespace An_Rnd
         {
             // Instantiate the portal prefab at the specified position
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
-            portal.GetComponent<SceneExitController>().useRunNextStageScene = false;
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
         }
 
@@ -91,18 +91,22 @@ namespace An_Rnd
 
             // check all gamebojects because this way was easiest, probably improvable
             GameObject[] portals = FindObjectsOfType<GameObject>();
+            bool found = false;
 
             foreach (GameObject portal in portals)
             {
                 if (portal.name.Contains("PortalArena")) // Check if this is a Null portal; no idea why its called PortalArena
                 {
-                    Logger.LogInfo("Found a Null portal!");
-                    // Get Positon
-                    Logger.LogInfo("pos: " + portal.transform.position);
-                    Logger.LogInfo("rot: " + portal.transform.rotation);
+                    found = true;
 
                     break;
                 }
+            }
+
+            if (!found)
+            {
+                //I copied Vector/Quaternion directly by getting them from the vanilla spawn, so it should be the same
+                GameObject portal = Instantiate(raidPortalPrefab, new Vector3(281.10f, -446.82f, -126.10f), new Quaternion(0.00000f, -0.73274f, 0.00000f, 0.68051f));
             }
         }
     }
