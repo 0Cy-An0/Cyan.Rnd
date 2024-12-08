@@ -2,10 +2,9 @@ using BepInEx;
 using ExamplePlugin;
 using R2API;
 using RoR2;
-using System.Reflection;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
-using static Rewired.UI.ControlMapper.ControlMapper;
 
 namespace An_Rnd
 {
@@ -40,7 +39,7 @@ namespace An_Rnd
             // Init our logging class so that we can properly log for debugging
             Log.Init(Logger);
             InitPortalPrefab();
-            On.RoR2.BazaarController.Awake += GetNullPos;
+            On.RoR2.BazaarController.OnStartServer += CheckNullPortal;
             //On.RoR2.VoidRaidEncounterController
             //On.RoR2.VoidRaidGauntletController
         }
@@ -78,16 +77,24 @@ namespace An_Rnd
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
         }
 
-        private void GetNullPos(On.RoR2.BazaarController.orig_Awake orig, BazaarController self)
+        private void CheckNullPortal(On.RoR2.BazaarController.orig_OnStartServer orig, BazaarController self)
         {
+            //bit unsure if i should do a serverside check here, i assume not because this hooks into OnStartServer, but who knows; remind me to check here if there is a problem
             orig(self);
-            // Find all portals in the scene
-            GameObject[] portals = FindObjectsOfType<GameObject>(); //this could probably take a long time
+            self.StartCoroutine(CheckNullDelay());
 
-            // Look for the Null portal (e.g., PortalArena, which is the Null portal)
+        }
+
+        private IEnumerator CheckNullDelay()
+        {
+            yield return new WaitForSeconds(1f);
+
+            // check all gamebojects because this way was easiest, probably improvable
+            GameObject[] portals = FindObjectsOfType<GameObject>();
+
             foreach (GameObject portal in portals)
             {
-                if (portal.name.Contains("PortalArena")) // Check if this is a Null portal
+                if (portal.name.Contains("PortalArena")) // Check if this is a Null portal; no idea why its called PortalArena
                 {
                     Logger.LogInfo("Found a Null portal!");
                     // Get Positon
