@@ -29,9 +29,7 @@ namespace An_Rnd
         public const string PluginName = "Cy/an Rnd";
         public const string PluginVersion = "1.0.0";
 
-        // We need our item definition to persist through our functions, and therefore make it a class field.
-        //private static ItemDef myItemDef;
-
+        //shopPortal is not neccessary anymore but ill leave it to reuse use when testing
         private static GameObject shopPortalPrefab;
         private static GameObject raidPortalPrefab;
         // The Awake() method is run at the very start when the game is initialized.
@@ -53,22 +51,18 @@ namespace An_Rnd
             raidPortalPrefab.GetComponent<SceneExitController>().useRunNextStageScene = false;
         }
 
-        // The Update() method is run on every frame of the game.
+        /* The Update() method is run on every frame of the game.
         private void Update()
         {
-            // This if statement checks if the player has currently pressed F2.
+            
             if (Input.GetKeyDown(KeyCode.F2))
             {
                 // Get the player body to use a position:
                 var transform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
 
-                // And then drop our defined item in front of the player.
-
-                //Log.Info($"Player pressed F2. try Spawning portal at coordinates {transform.position}");
                 ForceSpawnPortal(transform.position);
-                //PickupDropletController.CreatePickupDroplet(PickupCatalog.FindPickupIndex(myItemDef.itemIndex), transform.position, transform.forward * 20f);
             }
-        }
+        }*/
 
         private void ForceSpawnPortal(Vector3 position)
         {
