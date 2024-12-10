@@ -5,7 +5,6 @@ using RoR2;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
-using UnityEngine.UIElements;
 
 namespace An_Rnd
 {
@@ -32,6 +31,14 @@ namespace An_Rnd
         //shopPortal is not neccessary anymore but ill leave it to reuse use when testing
         private static GameObject shopPortalPrefab;
         private static GameObject raidPortalPrefab;
+        private static GameObject teleporterPrefab;
+
+        public static int arenaCount = -1; //this will count how many times the void fields were entered; just using the name convention of base RoR2 for the stage
+        //starts at -1 so that first entry is 0
+
+        //Will make this a riskofOptionsOption, probably, in the future.
+        public static int chunkSize = 50;
+
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
         {
@@ -39,8 +46,19 @@ namespace An_Rnd
             Log.Init(Logger);
             InitPortalPrefab();
             On.RoR2.BazaarController.OnStartServer += CheckNullPortal;
-            //On.RoR2.VoidRaidEncounterController
-            //On.RoR2.VoidRaidGauntletController
+            On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
+            On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
+            On.RoR2.Stage.Start += CheckTeleporterInstance;
+
+            //I was hoping to find this method also in the voidFields, because my teleporter idea did not work
+            On.RoR2.ShrineBossBehavior.Start += (orig, self) =>
+            {
+                // Log a message when the method is invoked
+                Log.Info("ShrineBossBehavior Start method called!");
+
+                // Call the original Start method to ensure normal behavior
+                orig(self);
+            };
         }
 
         private void InitPortalPrefab()
@@ -49,20 +67,87 @@ namespace An_Rnd
             raidPortalPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/PortalArena/PortalArena.prefab").WaitForCompletion();
             //Change flags, such that Null Portal actually connects to the void fields.
             raidPortalPrefab.GetComponent<SceneExitController>().useRunNextStageScene = false;
+            teleporterPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/Teleporters/Teleporter1.prefab").WaitForCompletion();
         }
 
-        /* The Update() method is run on every frame of the game.
+        // The Update() method is run on every frame of the game.
         private void Update()
         {
             
             if (Input.GetKeyDown(KeyCode.F2))
             {
                 // Get the player body to use a position:
-                var transform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
+                var player = PlayerCharacterMasterController.instances[0];
+                var transform = player.master.GetBodyObject().transform;
+                //i do not want to die while testing
+                player.master.godMode = true;
 
                 ForceSpawnPortal(transform.position);
             }
-        }*/
+        }
+
+        private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
+        {
+            //there is 'self.sceneDef.baseSceneName' but its seems to not be an instance for some reason, so i found this: 'SceneInfo.instance.sceneDef.baseSceneName'
+            if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
+            {
+                arenaCount += 1;
+                //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
+                VoidTele();
+            }
+            return orig(self);
+        }
+
+        private IEnumerator VoidTele()
+        {
+            //i want to avoid the teleportor showing up on the objectives list, and i am unsure when and were this happens. could search for a hook, could try this instead
+            yield return new WaitForSeconds(0.1f);
+            
+            GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
+            for (int i = 0; i < arenaCount * 5; i++) //this should activate count -1 shrines as the items should be at 1 for the first run
+            {
+                TeleporterInteraction.instance.AddShrineStack();
+            }
+        }
+
+        private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
+        {
+            // This drops the item after the selection so we just call it as many times as items are needed
+            ChunkRewards(orig, self, pickupIndex);
+        }
+        private IEnumerator ChunkRewards(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
+        {
+            int totalItems = 1 * (TeleporterInteraction.instance.shrineBonusStacks + 1);
+
+            for (int i = 0; i <= totalItems; i++)
+            {
+                orig(self, pickupIndex);
+
+                // Wait for 1 second after each chunk
+                if (i > 0 && i % chunkSize == 0) yield return new WaitForSeconds(1f);
+            }
+        }
+
+        private void MultiplyEnemyItem(On.RoR2.ArenaMissionController.orig_AddItemStack orig, ArenaMissionController self)
+        {
+            Inventory inv = self.inventory;
+
+            // Track how many items are being added by checking the previous state (before adding new items)
+            int[] originalItemStacks = (int[])inv.itemStacks.Clone(); // Clone the current stacks for comparison later
+
+            // Call the original method to add the items
+            orig(self);
+
+            // Compare the item stacks before and after; This should work a bit more generally than just for 1 item only like the void fields, so i might do something else with it later idk
+            for (int i = 0; i < inv.itemStacks.Length; i++)
+            {
+                if (inv.itemStacks[i] > originalItemStacks[i])
+                {
+                    // Multiply the added items
+                    inv.itemStacks[i] = originalItemStacks[i] + (inv.itemStacks[i] - originalItemStacks[i]) * (TeleporterInteraction.instance.shrineBonusStacks + 1);
+                }
+            }
+        }
 
         private void ForceSpawnPortal(Vector3 position)
         {
