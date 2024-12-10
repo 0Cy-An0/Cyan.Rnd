@@ -111,9 +111,16 @@ namespace An_Rnd
 
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
+
+            //self.StartCoroutine(ChunkRewards(orig, self, pickupIndex));
             // This drops the item after the selection so we just call it as many times as items are needed
-            ChunkRewards(orig, self, pickupIndex);
+            int total = (TeleporterInteraction.instance.shrineBonusStacks + 1);
+            for (int i = 0; i <= total; i++)
+            {
+                orig(self, pickupIndex);
+            }
         }
+
         private IEnumerator ChunkRewards(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
             int totalItems = 1 * (TeleporterInteraction.instance.shrineBonusStacks + 1);
