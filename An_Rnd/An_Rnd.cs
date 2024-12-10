@@ -49,16 +49,6 @@ namespace An_Rnd
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
-
-            //I was hoping to find this method also in the voidFields, because my teleporter idea did not work
-            On.RoR2.ShrineBossBehavior.Start += (orig, self) =>
-            {
-                // Log a message when the method is invoked
-                Log.Info("ShrineBossBehavior Start method called!");
-
-                // Call the original Start method to ensure normal behavior
-                orig(self);
-            };
         }
 
         private void InitPortalPrefab()
