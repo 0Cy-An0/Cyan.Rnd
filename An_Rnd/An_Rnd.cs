@@ -2,7 +2,9 @@ using BepInEx;
 using ExamplePlugin;
 using R2API;
 using RoR2;
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 
@@ -38,6 +40,8 @@ namespace An_Rnd
 
         //Will make this a riskofOptionsOption, probably, in the future.
         public static int chunkSize = 50;
+        //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
+        public static int[] latestInventoryItems;
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -60,8 +64,8 @@ namespace An_Rnd
             teleporterPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/Teleporters/Teleporter1.prefab").WaitForCompletion();
         }
 
-        /* The Update() method is run on every frame of the game.
-        private void Update()
+        //The Update() method is run on every frame of the game.
+        /*private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
             {
@@ -80,11 +84,30 @@ namespace An_Rnd
             //there is 'self.sceneDef.baseSceneName' but its seems to not be an instance for some reason, so i found this: 'SceneInfo.instance.sceneDef.baseSceneName'
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
-                arenaCount += 1;
+                arenaCount += 1; //counter how often we entered the void fields
+
+                //this should start the enemies with the items of the last attempts
+                AddOldInventory();
+
                 //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
-                VoidTele();
+                //VoidTele();
+                GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
+                for (int i = 0; i < arenaCount * 5; i++) //this should activate count -1 shrines as the items should be at 1 for the first run
+                {
+                    TeleporterInteraction.instance.AddShrineStack();
+                }
             }
             return orig(self);
+        }
+
+        private IEnumerator AddOldInventory()
+        {
+            //waiting because doing it in the start hook does not work, i assume the inventory does not exit/is cleared/newly created after
+            yield return new WaitForSeconds(0.1f);
+
+            // AddItemsFrom is a overloaded method, wich needs a filter to accept int[] as input; but we just want everything
+            Func<ItemIndex, bool> includeAllFilter = _ => true;
+            FindObjectOfType<ArenaMissionController>().inventory.AddItemsFrom(latestInventoryItems, includeAllFilter);
         }
 
         private IEnumerator VoidTele()
@@ -104,7 +127,7 @@ namespace An_Rnd
 
             //self.StartCoroutine(ChunkRewards(orig, self, pickupIndex));
             // This drops the item after the selection so we just call it as many times as items are needed
-            int total = (TeleporterInteraction.instance.shrineBonusStacks + 1);
+            int total = (TeleporterInteraction.instance.shrineBonusStacks);
             for (int i = 0; i <= total; i++)
             {
                 orig(self, pickupIndex);
@@ -113,8 +136,9 @@ namespace An_Rnd
 
         private IEnumerator ChunkRewards(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
-            int totalItems = 1 * (TeleporterInteraction.instance.shrineBonusStacks + 1);
+            int totalItems = (TeleporterInteraction.instance.shrineBonusStacks);
 
+            //if mountain shrines are 0, it should still give 1 item (first run)
             for (int i = 0; i <= totalItems; i++)
             {
                 orig(self, pickupIndex);
@@ -134,14 +158,16 @@ namespace An_Rnd
             // Call the original method to add the items
             orig(self);
 
+            latestInventoryItems = new int[inv.itemStacks.Length + 1];
             // Compare the item stacks before and after; This should work a bit more generally than just for 1 item only like the void fields, so i might do something else with it later idk
             for (int i = 0; i < inv.itemStacks.Length; i++)
             {
                 if (inv.itemStacks[i] > originalItemStacks[i])
                 {
-                    // Multiply the added items
+                    // Multiply the added items; its mountain + 1, because it has to multiply by 1 at least
                     inv.itemStacks[i] = originalItemStacks[i] + (inv.itemStacks[i] - originalItemStacks[i]) * (TeleporterInteraction.instance.shrineBonusStacks + 1);
                 }
+                latestInventoryItems[i] = inv.itemStacks[i];
             }
         }
 
