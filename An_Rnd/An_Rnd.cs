@@ -87,7 +87,14 @@ namespace An_Rnd
                 arenaCount += 1; //counter how often we entered the void fields
 
                 //this should start the enemies with the items of the last attempts
-                AddOldInventory();
+                if (latestInventoryItems != null)
+                {
+                    ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
+                    // AddItemsFrom is a overloaded method, wich needs a filter to accept int[] as input; but we just want everything
+                    Func<ItemIndex, bool> includeAllFilter = _ => true;
+                    controller.inventory.AddItemsFrom(latestInventoryItems, includeAllFilter);
+                }
+                
 
                 //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
                 //VoidTele();
@@ -98,16 +105,6 @@ namespace An_Rnd
                 }
             }
             return orig(self);
-        }
-
-        private IEnumerator AddOldInventory()
-        {
-            //waiting because doing it in the start hook does not work, i assume the inventory does not exit/is cleared/newly created after
-            yield return new WaitForSeconds(0.1f);
-
-            // AddItemsFrom is a overloaded method, wich needs a filter to accept int[] as input; but we just want everything
-            Func<ItemIndex, bool> includeAllFilter = _ => true;
-            FindObjectOfType<ArenaMissionController>().inventory.AddItemsFrom(latestInventoryItems, includeAllFilter);
         }
 
         private IEnumerator VoidTele()
@@ -137,9 +134,10 @@ namespace An_Rnd
         private IEnumerator ChunkRewards(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
             int totalItems = (TeleporterInteraction.instance.shrineBonusStacks);
+            if (totalItems == 0) totalItems = 1; //if no shrines are active we are in the first run so 1 item
 
             //if mountain shrines are 0, it should still give 1 item (first run)
-            for (int i = 0; i <= totalItems; i++)
+            for (int i = 0; i < totalItems; i++)
             {
                 orig(self, pickupIndex);
 
@@ -158,7 +156,7 @@ namespace An_Rnd
             // Call the original method to add the items
             orig(self);
 
-            latestInventoryItems = new int[inv.itemStacks.Length + 1];
+            latestInventoryItems = new int[inv.itemStacks.Length];
             // Compare the item stacks before and after; This should work a bit more generally than just for 1 item only like the void fields, so i might do something else with it later idk
             for (int i = 0; i < inv.itemStacks.Length; i++)
             {
