@@ -1,5 +1,6 @@
 using An_Rnd;
 using BepInEx;
+using RiskOfOptions.Options;
 using R2API;
 using RoR2;
 using System;
@@ -7,6 +8,8 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using BepInEx.Configuration;
+using RiskOfOptions;
+using System.Reflection;
 
 namespace An_Rnd
 {
@@ -66,16 +69,18 @@ namespace An_Rnd
                 "How many shrines activate per extra entry for the void fields. so second entry will activate this number third this *2, etc."
             );
 
-            //If chatGpt helped me correctly this try block should make it work with and without RiskOfOptions. Do i Trust that this is the best way to do this? no! do i have a better alternative on hand... sadly i have no other ideas.
+            //If ChatGpt helped me correctly this try block should make it work with and without RiskOfOptions. Do i Trust that this is the best way to do this? no! do i have a better alternative on hand... sadly i have no other ideas.
             try
             {
-                // Check if the RiskOfOptions.ModSettingsManager type is available
+                // Check if RiskOfOptions.ModSettingsManager exists
                 Type modSettingsManagerType = Type.GetType("RiskOfOptions.ModSettingsManager, RiskOfOptions");
                 if (modSettingsManagerType != null)
                 {
                     // Create IntSliderConfig dynamically
                     Type intSliderConfigType = Type.GetType("RiskOfOptions.OptionConfigs.IntSliderConfig, RiskOfOptions");
                     var intSliderConfig = Activator.CreateInstance(intSliderConfigType);
+
+                    // Set properties for IntSliderConfig
                     intSliderConfigType.GetProperty("min")?.SetValue(intSliderConfig, 1);
                     intSliderConfigType.GetProperty("max")?.SetValue(intSliderConfig, 100);
 
@@ -83,11 +88,20 @@ namespace An_Rnd
                     Type intSliderOptionType = Type.GetType("RiskOfOptions.Options.IntSliderOption, RiskOfOptions");
                     var intSliderOption = Activator.CreateInstance(intSliderOptionType, numShrinesConfig, intSliderConfig);
 
-                    // Add the option via ModSettingsManager
-                    var addOptionMethod = modSettingsManagerType.GetMethod("AddOption");
-                    addOptionMethod.Invoke(null, new[] { intSliderOption });
+                    // Resolve AddOption(BaseOption option) method
+                    var baseOptionType = Type.GetType("RiskOfOptions.Options.BaseOption, RiskOfOptions");
+                    var addOptionMethod = modSettingsManagerType.GetMethod(
+                        "AddOption",
+                        BindingFlags.Public | BindingFlags.Static,
+                        null,
+                        new[] { baseOptionType },
+                        null
+                    );
 
-                    Log.Info("RiskOfOptions integration successful.");
+                    // Invoke AddOption(BaseOption option)
+                    addOptionMethod?.Invoke(null, new[] { intSliderOption });
+
+                    Debug.Log("RiskOfOptions integration successful.");
                 }
                 else
                 {
@@ -99,7 +113,7 @@ namespace An_Rnd
                 Log.Error($"Failed to integrate RiskOfOptions: {ex.Message}");
             }
 
-            //hook when the settings are changed, so that i can hopfully make RiskOfOptions optional
+            //hook when the settings are changed, so that i can hopefully make RiskOfOptions optional
             numShrinesConfig.SettingChanged += (sender, args) =>
             {
                 numShrines = numShrinesConfig.Value;
@@ -116,7 +130,7 @@ namespace An_Rnd
         }
 
         //The Update() method is run on every frame of the game.
-        /*private void Update()
+        private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
             {
@@ -128,7 +142,7 @@ namespace An_Rnd
 
                 ForceSpawnPortal(transform.position);
             }
-        }*/
+        }
 
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
@@ -150,7 +164,7 @@ namespace An_Rnd
                 //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
                 //VoidTele();
                 GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
-                for (int i = 0; i < arenaCount * numShrines; i++) //this should activate count -1 shrines as the items should be at 1 for the first run
+                for (int i = 0; i < arenaCount * numShrines; i++)
                 {
                     TeleporterInteraction.instance.AddShrineStack();
                 }
@@ -165,7 +179,7 @@ namespace An_Rnd
             yield return new WaitForSeconds(0.1f);
             
             GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
-            for (int i = 0; i < arenaCount * numShrines; i++) //this should activate count -1 shrines as the items should be at 1 for the first run
+            for (int i = 0; i < arenaCount * numShrines; i++)
             {
                 TeleporterInteraction.instance.AddShrineStack();
             }
@@ -177,7 +191,7 @@ namespace An_Rnd
             //self.StartCoroutine(ChunkRewards(orig, self, pickupIndex));
             // This drops the item after the selection so we just call it as many times as items are needed
             int total = (TeleporterInteraction.instance.shrineBonusStacks);
-            for (int i = 0; i <= total; i++)
+            for (int i = 0; i < total; i++)
             {
                 orig(self, pickupIndex);
             }
@@ -214,8 +228,7 @@ namespace An_Rnd
             {
                 if (inv.itemStacks[i] > originalItemStacks[i])
                 {
-                    // Multiply the added items; its mountain + 1, because it has to multiply by 1 at least
-                    inv.itemStacks[i] = originalItemStacks[i] + (inv.itemStacks[i] - originalItemStacks[i]) * (TeleporterInteraction.instance.shrineBonusStacks + 1);
+                    inv.itemStacks[i] = originalItemStacks[i] + (inv.itemStacks[i] - originalItemStacks[i]) * (TeleporterInteraction.instance.shrineBonusStacks);
                 }
                 latestInventoryItems[i] = inv.itemStacks[i];
             }
