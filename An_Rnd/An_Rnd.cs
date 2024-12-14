@@ -201,8 +201,8 @@ namespace An_Rnd
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.FloatFieldOption, RiskOfOptions");
                     Type configType = Type.GetType("RiskOfOptions.OptionConfigs.FloatFieldConfig, RiskOfOptions");
                     object configInstance = Activator.CreateInstance(configType);
-                    configType.GetField("min")?.SetValue(configInstance, (float) min);
-                    configType.GetField("max")?.SetValue(configInstance, (float) max);
+                    configType.GetField("Min")?.SetValue(configInstance, (float) min);
+                    configType.GetField("Max")?.SetValue(configInstance, (float) max);
                     Log.Info($"Option {config.Definition.Key} as FloatField");
                     return Activator.CreateInstance(baseOptionType, config, configInstance);
                 }
