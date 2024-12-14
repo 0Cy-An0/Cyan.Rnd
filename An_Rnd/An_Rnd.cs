@@ -10,6 +10,7 @@ using UnityEngine.AddressableAssets;
 using BepInEx.Configuration;
 using RiskOfOptions;
 using System.Reflection;
+using System.Collections.Generic;
 
 namespace An_Rnd
 {
@@ -42,6 +43,14 @@ namespace An_Rnd
         public static int chunkSize = 50;
         //how many shrines shall activate per entry of the fields; first entry is always base game 0
         public static int numShrines = 5;
+        //How many times the void fields roll for items per activiation. Every rolled item stays!
+        public static int extraStacks = 1;
+        //How many shrines need to be active for the above option to increase by 1. Will set on entry to active / Threshold (int div).
+        public static int extraStacksThreshold = 1;
+        //How many extra items are given to the enemies per active mountain shrine (Rounded down based on the number normally given)
+        public static float extraItems = 1f;
+        //How many items are spawned after picking per active mountain shrine (Rounded down, because i can't spawn fractions of items)
+        public static float extraRewards = 1f;
         //Super Secret Option
         public static bool KillMeOption = false;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
@@ -63,62 +72,64 @@ namespace An_Rnd
 
         private void TryInitRiskOfOptions()
         {
-            //Configs for all Options with Category, Name, Default, Description
-            ConfigEntry<int> numShrinesConfig = Config.Bind(
-                "General",
-                "Number of Shrines",
-                5,
-                "How many shrines activate per extra entry for the void fields. so second entry will activate this number third this *2, etc."
-            );
+            // Define the List to store ConfigEntry and the corresponding update action for static variables
+            //ConfigEntry is Configurations for option with Category, Name, Default, and Description
+            var configEntries = new List<(ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar)>
+            {
+                (
+                    Config.Bind("General", "Number of Shrines", 5, "Number of shrines activated per additional void field entry."),
+                    typeof(int),
+                    new Action<object>(value => numShrines = (int)value)
+                ),
+                (
+                    Config.Bind("General", "Enemy Extra ItemStacks", 1, "Sets the number of additional item stacks void fields can obtain."),
+                    typeof(int),
+                    new Action<object>(value => extraStacks = (int)value)
+                ),
+                (
+                    Config.Bind("General", "Enemy Extra ItemStacks Threshold", 1, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks'."),
+                    typeof(int),
+                    new Action<object>(value => extraStacksThreshold = (int)value)
+                ),
+                (
+                    Config.Bind("General", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine."),
+                    typeof(float),
+                    new Action<object>(value => extraItems = (float)value)
+                ),
+                (
+                    Config.Bind("General", "Reward Item Multiplier per Shrine", 1f, "Multiplier for void field rewards per active shrine."),
+                    typeof(float),
+                    new Action<object>(value => extraRewards = (float)value)
+                ),
+                (
+                    Config.Bind("General", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type."),
+                    typeof(bool),
+                    new Action<object>(value => KillMeOption = (bool)value)
+                )
+            };
 
-            ConfigEntry<bool> KillMeOptionConfig = Config.Bind(
-                "General",
-                "Kill Me",
-                false,
-                "If you think the void fields are way too easy, how about instead of every time the enemies would get one item type, they instead gain one of every item type? This scales appropriately with extra entries, so that for the second entry, they will gain five of all items each time they would normally get one type of item.\nGood luck—it won't matter."
-            );
-
-            //If ChatGpt helped me correctly this try block should make it work with and without RiskOfOptions. Do i Trust that this is the best way to do this? no! do i have a better alternative on hand... sadly i have no other ideas.
             try
             {
-                // Check if RiskOfOptions.ModSettingsManager exists
+                // Check if RiskOfOptions is available
                 Type modSettingsManagerType = Type.GetType("RiskOfOptions.ModSettingsManager, RiskOfOptions");
                 if (modSettingsManagerType != null)
                 {
-                    // Create IntSliderConfig dynamically
-                    Type intSliderConfigType = Type.GetType("RiskOfOptions.OptionConfigs.IntSliderConfig, RiskOfOptions");
-                    var intSliderConfig = Activator.CreateInstance(intSliderConfigType);
-
-                    // Use reflection to set the fields directly
-                    FieldInfo minField = intSliderConfigType.GetField("min");
-                    FieldInfo maxField = intSliderConfigType.GetField("max");
-                    if (minField != null && maxField != null)
+                    // Dynamically create configurations and options
+                    foreach (var (config, varType, _) in configEntries)
                     {
-                        minField.SetValue(intSliderConfig, 1);
-                        maxField.SetValue(intSliderConfig, 1000);
+                        object option = CreateOption(config, varType); //vodoo method to create the option like RiskOfOptions expects it, with it's typing; i say vodoo because i do not feel very confidend in this and got a bit of a short 1hour lesson from ChatGpt that did not help me at all
+                        if (option != null)
+                        {
+                            MethodInfo addOptionMethod = modSettingsManagerType.GetMethod(
+                                "AddOption",
+                                BindingFlags.Public | BindingFlags.Static,
+                                null,
+                                new[] { option.GetType().BaseType },
+                                null
+                            );
+                            addOptionMethod?.Invoke(null, new[] { option }); //Invokes as in this calls the method of RiskOfOptions that then lists my option and stuff
+                        }
                     }
-
-                    // Create IntSliderOption dynamically
-                    Type intSliderOptionType = Type.GetType("RiskOfOptions.Options.IntSliderOption, RiskOfOptions");
-                    var intSliderOption = Activator.CreateInstance(intSliderOptionType, numShrinesConfig, intSliderConfig);
-
-                    //Create CheckBoxOption dynamically
-                    Type CheckBoxOptionType = Type.GetType("RiskOfOptions.Options.CheckBoxOption, RiskOfOptions");
-                    var CheckBoxOption = Activator.CreateInstance(CheckBoxOptionType, KillMeOptionConfig);
-
-                    // Resolve AddOption(BaseOption option) method
-                    var baseOptionType = Type.GetType("RiskOfOptions.Options.BaseOption, RiskOfOptions");
-                    var addOptionMethod = modSettingsManagerType.GetMethod(
-                        "AddOption",
-                        BindingFlags.Public | BindingFlags.Static,
-                        null,
-                        new[] { baseOptionType },
-                        null
-                    );
-
-                    // Invoke AddOption(BaseOption option)
-                    addOptionMethod?.Invoke(null, new[] { intSliderOption });
-                    addOptionMethod?.Invoke(null, new[] { CheckBoxOption });
 
                     Log.Info("RiskOfOptions integration successful.");
                 }
@@ -132,12 +143,73 @@ namespace An_Rnd
                 Log.Error($"Failed to integrate RiskOfOptions: {ex.Message}");
             }
 
-            //hook when the settings are changed, so that i can hopefully make RiskOfOptions optional
-            numShrinesConfig.SettingChanged += (sender, args) =>
+            // Hook setting changes dynamically
+            foreach (var (config, StaticType, updateStaticVar) in configEntries)
             {
-                numShrines = numShrinesConfig.Value;
-            };
+                // Cast to the specific type of ConfigEntry<T> dynamically
+                if (StaticType == typeof(int))
+                {
+                    ConfigEntry<int> castConfig = (ConfigEntry<int>) config;
+                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
+                }
+                else if (StaticType == typeof(float))
+                {
+                    ConfigEntry<float> castConfig = (ConfigEntry<float>)config;
+                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
+                }
+                else if (StaticType == typeof(bool))
+                {
+                    ConfigEntry<bool> castConfig = (ConfigEntry<bool>)config;
+                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
+                }
+                else
+                {
+                    Log.Warning($"Could not get type {StaticType} to hook SettingChanged for {config.Definition.Key}");
+                }
+            }
         }
+
+        private object CreateOption(ConfigEntryBase config, Type varType)
+        {
+            try
+            {
+                //make sure the config that is beeing used here is used with the correct typing. This is what prepares the options for RiskOfOptions, but its treated as if it may not even exist so that i can compile without, which is why it may look a bit wired
+                if (varType == typeof(int))
+                {
+                    Type baseOptionType = Type.GetType("RiskOfOptions.Options.IntSliderOption, RiskOfOptions");
+                    Type configType = Type.GetType("RiskOfOptions.OptionConfigs.IntSliderConfig, RiskOfOptions");
+                    object configInstance = Activator.CreateInstance(configType);
+                    configType.GetField("min")?.SetValue(configInstance, 1);
+                    configType.GetField("max")?.SetValue(configInstance, 1000);
+                    return Activator.CreateInstance(baseOptionType, config, configInstance);
+                }
+                else if (varType == typeof(float))
+                {
+                    Type baseOptionType = Type.GetType("RiskOfOptions.Options.FloatFieldOption, RiskOfOptions");
+                    Type configType = Type.GetType("RiskOfOptions.OptionConfigs.FloatFieldConfig, RiskOfOptions");
+                    object configInstance = Activator.CreateInstance(configType);
+                    configType.GetField("min")?.SetValue(configInstance, 0f);
+                    configType.GetField("max")?.SetValue(configInstance, 1000f);
+                    return Activator.CreateInstance(baseOptionType, config, configInstance);
+                }
+                else if (varType == typeof(bool))
+                {
+                    Type baseOptionType = Type.GetType("RiskOfOptions.Options.CheckBoxOption, RiskOfOptions");
+                    return Activator.CreateInstance(baseOptionType, config);
+                }
+                else
+                {
+                    Log.Error($"Failed to create option for {config.Definition.Key}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to create option for {config.Definition.Key}: {ex.Message}");
+                return null;
+            }
+        }
+
 
         private void InitPortalPrefab()
         {
@@ -149,7 +221,7 @@ namespace An_Rnd
         }
 
         //The Update() method is run on every frame of the game.
-        /*private void Update()
+        private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
             {
@@ -161,7 +233,7 @@ namespace An_Rnd
 
                 ForceSpawnPortal(transform.position);
             }
-        }*/
+        }
 
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
