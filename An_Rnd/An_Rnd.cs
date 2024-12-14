@@ -55,7 +55,7 @@ namespace An_Rnd
             InitPortalPrefab();
             TryInitRiskOfOptions();
             
-            On.RoR2.BazaarController.OnStartServer += CheckNullPortal;
+            On.RoR2.BazaarController.Start += CheckNullPortal;
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
@@ -268,7 +268,7 @@ namespace An_Rnd
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
         }
 
-        private void CheckNullPortal(On.RoR2.BazaarController.orig_OnStartServer orig, BazaarController self)
+        private void CheckNullPortal(On.RoR2.BazaarController.orig_Start orig, BazaarController self)
         {
             //bit unsure if i should do a serverside check here, i assume not because this hooks into OnStartServer, but who knows; remind me to check here if there is a problem
             orig(self);

@@ -17,3 +17,8 @@ Does Random stuff I wanted to have in the game:
 - save so properSave can reload
 - config with RiskOfOptions
 - Remove all Highlights (maybe a button in the Settings?) from new unlocks
+
+bugs/untested:
+- variables persist over new games
+- artifact of evolution
+- null portal does not sync to non-host
