@@ -72,39 +72,51 @@ namespace An_Rnd
 
         private void TryInitRiskOfOptions()
         {
-            // Define the List to store ConfigEntry and the corresponding update action for static variables
+            // Define the List to store ConfigEntry, Typing, the corresponding update action for the static variable and min/max for the slider/field
             //ConfigEntry is Configurations for option with Category, Name, Default, and Description
-            var configEntries = new List<(ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar)>
+            var configEntries = new List<(ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar, object min, object max)>
             {
                 (
                     Config.Bind("General", "Number of Shrines", 5, "Number of shrines activated per additional void field entry."),
                     typeof(int),
-                    new Action<object>(value => numShrines = (int)value)
+                    new Action<object>(value => numShrines = (int)value),
+                    0,
+                    10000
                 ),
                 (
-                    Config.Bind("General", "Enemy Extra ItemStacks", 1, "Sets the number of additional item stacks void fields can obtain."),
+                    Config.Bind("General", "Enemy ItemStacks", 1, "Sets the number of itemStacks the void fields enemies can obtain.\n1 per activation is vanilla, but with this you can get for example goat's hoof and crit classes at the same time"),
                     typeof(int),
-                    new Action<object>(value => extraStacks = (int)value)
+                    new Action<object>(value => extraStacks = (int)value),
+                    1,
+                    10000
                 ),
                 (
-                    Config.Bind("General", "Enemy Extra ItemStacks Threshold", 1, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks'."),
+                    Config.Bind("General", "Enemy Extra ItemStacks Threshold", 1, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks'.\n0 for disabled"),
                     typeof(int),
-                    new Action<object>(value => extraStacksThreshold = (int)value)
+                    new Action<object>(value => extraStacksThreshold = (int)value),
+                    0,
+                    1000
                 ),
                 (
-                    Config.Bind("General", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine."),
+                    Config.Bind("General", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine.\n0 for disable"),
                     typeof(float),
-                    new Action<object>(value => extraItems = (float)value)
+                    new Action<object>(value => extraItems = (float)value),
+                    0f,
+                    10000f
                 ),
                 (
-                    Config.Bind("General", "Reward Item Multiplier per Shrine", 1f, "Multiplier for void field rewards per active shrine."),
+                    Config.Bind("General", "Reward Item Multiplier per Shrine", 1f, "Multiplier for void field rewards per active shrine.\n0 for disable"),
                     typeof(float),
-                    new Action<object>(value => extraRewards = (float)value)
+                    new Action<object>(value => extraRewards = (float)value),
+                    0f,
+                    10000f
                 ),
                 (
                     Config.Bind("General", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type."),
                     typeof(bool),
-                    new Action<object>(value => KillMeOption = (bool)value)
+                    new Action<object>(value => KillMeOption = (bool)value),
+                    null, //a bool option does not need a min/max [should be somewhat obvious i guess]
+                    null
                 )
             };
 
@@ -115,9 +127,9 @@ namespace An_Rnd
                 if (modSettingsManagerType != null)
                 {
                     // Dynamically create configurations and options
-                    foreach (var (config, varType, _) in configEntries)
+                    foreach (var (config, varType, _, min, max) in configEntries)
                     {
-                        object option = CreateOption(config, varType); //vodoo method to create the option like RiskOfOptions expects it, with it's typing; i say vodoo because i do not feel very confidend in this and got a bit of a short 1hour lesson from ChatGpt that did not help me at all
+                        object option = CreateOption(config, varType, min, max); //vodoo method to create the option like RiskOfOptions expects it, with it's typing; i say vodoo because i do not feel very confidend in this and got a bit of a short 1hour lesson from ChatGpt that did not help me at all
                         if (option != null)
                         {
                             MethodInfo addOptionMethod = modSettingsManagerType.GetMethod(
@@ -144,7 +156,7 @@ namespace An_Rnd
             }
 
             // Hook setting changes dynamically
-            foreach (var (config, StaticType, updateStaticVar) in configEntries)
+            foreach (var (config, StaticType, updateStaticVar, _ , _) in configEntries)
             {
                 // Cast to the specific type of ConfigEntry<T> dynamically
                 if (StaticType == typeof(int))
@@ -169,7 +181,7 @@ namespace An_Rnd
             }
         }
 
-        private object CreateOption(ConfigEntryBase config, Type varType)
+        private object CreateOption(ConfigEntryBase config, Type varType, object min, object max)
         {
             try
             {
@@ -179,8 +191,9 @@ namespace An_Rnd
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.IntSliderOption, RiskOfOptions");
                     Type configType = Type.GetType("RiskOfOptions.OptionConfigs.IntSliderConfig, RiskOfOptions");
                     object configInstance = Activator.CreateInstance(configType);
-                    configType.GetField("min")?.SetValue(configInstance, 1);
-                    configType.GetField("max")?.SetValue(configInstance, 1000);
+                    configType.GetField("min")?.SetValue(configInstance, (int) min);
+                    configType.GetField("max")?.SetValue(configInstance, (int) max);
+                    Log.Info($"Option {config.Definition.Key} as IntSlider");
                     return Activator.CreateInstance(baseOptionType, config, configInstance);
                 }
                 else if (varType == typeof(float))
@@ -188,18 +201,20 @@ namespace An_Rnd
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.FloatFieldOption, RiskOfOptions");
                     Type configType = Type.GetType("RiskOfOptions.OptionConfigs.FloatFieldConfig, RiskOfOptions");
                     object configInstance = Activator.CreateInstance(configType);
-                    configType.GetField("min")?.SetValue(configInstance, 0f);
-                    configType.GetField("max")?.SetValue(configInstance, 1000f);
+                    configType.GetField("min")?.SetValue(configInstance, (float) min);
+                    configType.GetField("max")?.SetValue(configInstance, (float) max);
+                    Log.Info($"Option {config.Definition.Key} as FloatField");
                     return Activator.CreateInstance(baseOptionType, config, configInstance);
                 }
                 else if (varType == typeof(bool))
                 {
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.CheckBoxOption, RiskOfOptions");
+                    Log.Info($"Option {config.Definition.Key} as CheckBox");
                     return Activator.CreateInstance(baseOptionType, config);
                 }
                 else
                 {
-                    Log.Error($"Failed to create option for {config.Definition.Key}");
+                    Log.Error($"Failed to create option for {config.Definition.Key} because type was {varType}");
                     return null;
                 }
             }
@@ -221,7 +236,7 @@ namespace An_Rnd
         }
 
         //The Update() method is run on every frame of the game.
-        private void Update()
+        /*private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
             {
@@ -233,7 +248,7 @@ namespace An_Rnd
 
                 ForceSpawnPortal(transform.position);
             }
-        }
+        }*/
 
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
