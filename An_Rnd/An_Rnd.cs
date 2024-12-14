@@ -1,27 +1,24 @@
+using An_Rnd;
 using BepInEx;
-using ExamplePlugin;
 using R2API;
 using RoR2;
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using BepInEx.Configuration;
 
 namespace An_Rnd
 {
-    // This attribute specifies that we have a dependency on a given BepInEx Plugin,
-    // We need the R2API ItemAPI dependency because we are using for adding our item to the game.
-    // You don't need this if you're not using R2API in your plugin,
-    // it's just to tell BepInEx to initialize R2API before this plugin so it's safe to use R2API.
+    //RoR2Api Dependecys
     [BepInDependency(ItemAPI.PluginGUID)]
 
-    // This one is because we use a .language file for language tokens
-    // More info in https://risk-of-thunder.github.io/R2Wiki/Mod-Creation/Assets/Localization/
     [BepInDependency(LanguageAPI.PluginGUID)]
 
-    // This attribute is required, and lists metadata for your plugin.
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
+
+    //Risk of options
+    [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
 
     public class An_Rnd : BaseUnityPlugin
     {
@@ -38,8 +35,10 @@ namespace An_Rnd
         public static int arenaCount = -1; //this will count how many times the void fields were entered; just using the name convention of base RoR2 for the stage
         //starts at -1 so that first entry is 0
 
-        //Will make this a riskofOptionsOption, probably, in the future.
+        //Will make this a riskofOptionsOption, probably, in the future; If this even does anything by then, which it does not currenlty, while i am adding Options
         public static int chunkSize = 50;
+        //how many shrines shall activate per entry of the fields; first entry is always base game 0
+        public static int numShrines = 5;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
         public static int[] latestInventoryItems;
 
@@ -49,10 +48,62 @@ namespace An_Rnd
             // Init our logging class so that we can properly log for debugging
             Log.Init(Logger);
             InitPortalPrefab();
+            TryInitRiskOfOptions();
+            
             On.RoR2.BazaarController.OnStartServer += CheckNullPortal;
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
+        }
+
+        private void TryInitRiskOfOptions()
+        {
+            //Configs for all Options with Category, Name, Default, Description
+            ConfigEntry<int> numShrinesConfig = Config.Bind(
+                "General",
+                "Number of Shrines",
+                5,
+                "How many shrines activate per extra entry for the void fields. so second entry will activate this number third this *2, etc."
+            );
+
+            //If chatGpt helped me correctly this try block should make it work with and without RiskOfOptions. Do i Trust that this is the best way to do this? no! do i have a better alternative on hand... sadly i have no other ideas.
+            try
+            {
+                // Check if the RiskOfOptions.ModSettingsManager type is available
+                Type modSettingsManagerType = Type.GetType("RiskOfOptions.ModSettingsManager, RiskOfOptions");
+                if (modSettingsManagerType != null)
+                {
+                    // Create IntSliderConfig dynamically
+                    Type intSliderConfigType = Type.GetType("RiskOfOptions.OptionConfigs.IntSliderConfig, RiskOfOptions");
+                    var intSliderConfig = Activator.CreateInstance(intSliderConfigType);
+                    intSliderConfigType.GetProperty("min")?.SetValue(intSliderConfig, 1);
+                    intSliderConfigType.GetProperty("max")?.SetValue(intSliderConfig, 100);
+
+                    // Create IntSliderOption dynamically
+                    Type intSliderOptionType = Type.GetType("RiskOfOptions.Options.IntSliderOption, RiskOfOptions");
+                    var intSliderOption = Activator.CreateInstance(intSliderOptionType, numShrinesConfig, intSliderConfig);
+
+                    // Add the option via ModSettingsManager
+                    var addOptionMethod = modSettingsManagerType.GetMethod("AddOption");
+                    addOptionMethod.Invoke(null, new[] { intSliderOption });
+
+                    Log.Info("RiskOfOptions integration successful.");
+                }
+                else
+                {
+                    Log.Warning("RiskOfOptions is not available. Falling back to default behavior.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to integrate RiskOfOptions: {ex.Message}");
+            }
+
+            //hook when the settings are changed, so that i can hopfully make RiskOfOptions optional
+            numShrinesConfig.SettingChanged += (sender, args) =>
+            {
+                numShrines = numShrinesConfig.Value;
+            };
         }
 
         private void InitPortalPrefab()
@@ -99,7 +150,7 @@ namespace An_Rnd
                 //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
                 //VoidTele();
                 GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
-                for (int i = 0; i < arenaCount * 5; i++) //this should activate count -1 shrines as the items should be at 1 for the first run
+                for (int i = 0; i < arenaCount * numShrines; i++) //this should activate count -1 shrines as the items should be at 1 for the first run
                 {
                     TeleporterInteraction.instance.AddShrineStack();
                 }
@@ -107,13 +158,14 @@ namespace An_Rnd
             return orig(self);
         }
 
+        //just to note for future reference, using this caused some wired error. Maybe something else was going on at the time, but for now ill say it does not work
         private IEnumerator VoidTele()
         {
             //i want to avoid the teleportor showing up on the objectives list, and i am unsure when and were this happens. could search for a hook, could try this instead
             yield return new WaitForSeconds(0.1f);
             
             GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
-            for (int i = 0; i < arenaCount * 5; i++) //this should activate count -1 shrines as the items should be at 1 for the first run
+            for (int i = 0; i < arenaCount * numShrines; i++) //this should activate count -1 shrines as the items should be at 1 for the first run
             {
                 TeleporterInteraction.instance.AddShrineStack();
             }
