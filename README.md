@@ -8,17 +8,16 @@ Does Random stuff I wanted to have in the game:
             - i like it this way because i have other mods that do stuff with shrines, im probably gonna make this optional later (when adding properSave/riskofOptions funcionality)
         - items can still only be selected once per player but will drop multiplied after selection
         - Additional Items might fall of the edge. This is Intended. (in so far that i can't be bother to make it so that the items don't explode)
-
+ - config with RiskOfOptions (this is optional, the mod will automatically use it if available and will still be usable with default values without)
 
  Currently just ideas:
  
  - void field stuff
     - might add a option to get all three items via round robin
 - save so properSave can reload
-- config with RiskOfOptions
 - Remove all Highlights (maybe a button in the Settings?) from new unlocks
 
 bugs/untested:
 - variables persist over new games
 - artifact of evolution
-- null portal does not sync to non-host
+- null portal does not sync to non-host (maybe fixed, can't test right now)
