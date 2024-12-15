@@ -201,8 +201,27 @@ namespace An_Rnd
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.FloatFieldOption, RiskOfOptions");
                     Type configType = Type.GetType("RiskOfOptions.OptionConfigs.FloatFieldConfig, RiskOfOptions");
                     object configInstance = Activator.CreateInstance(configType);
-                    configType.GetField("Min")?.SetValue(configInstance, (float) min);
-                    configType.GetField("Max")?.SetValue(configInstance, (float) max);
+                    // Use GetProperty to modify Min and Max properties; apparently FloatField uses Properties and not just public fields like intSlider, idk why
+                    var minProperty = configType.GetProperty("Min");
+                    var maxProperty = configType.GetProperty("Max");
+                    if (minProperty != null && minProperty.CanWrite)
+                    {
+                        minProperty.SetValue(configInstance, min);
+                    }
+                    else
+                    {
+                        Log.Warning("Unable to set Min property.");
+                    }
+
+                    if (maxProperty != null && maxProperty.CanWrite)
+                    {
+                        maxProperty.SetValue(configInstance, max);
+                    }
+                    else
+                    {
+                        Log.Warning("Unable to set Max property.");
+                    }
+
                     Log.Info($"Option {config.Definition.Key} as FloatField");
                     return Activator.CreateInstance(baseOptionType, config, configInstance);
                 }
