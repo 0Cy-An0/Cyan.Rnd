@@ -84,18 +84,18 @@ namespace An_Rnd
                     10000
                 ),
                 (
-                    Config.Bind("General", "Enemy ItemStacks", 1, "Sets the number of itemStacks the void fields enemies can obtain.\n1 per activation is vanilla, but with this you can get for example goat's hoof and crit classes at the same time"),
+                    Config.Bind("General", "Enemy ItemStacks", 1, "Sets the number of itemStacks the void fields enemies can obtain.\n1 per activation is vanilla, but with this you can get for example goat's hoof and crit classes at the same time\ndisabled if Kill Me is checked"),
                     typeof(int),
                     new Action<object>(value => extraStacks = (int)value),
                     1,
-                    10000
+                    1000
                 ),
                 (
-                    Config.Bind("General", "Enemy Extra ItemStacks Threshold", 1, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks'.\n0 for disabled"),
+                    Config.Bind("General", "Enemy Extra ItemStacks Threshold", 0, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks'.\n0 for disabled"),
                     typeof(int),
                     new Action<object>(value => extraStacksThreshold = (int)value),
                     0,
-                    1000
+                    10000
                 ),
                 (
                     Config.Bind("General", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine.\n0 for disable"),
@@ -244,7 +244,6 @@ namespace An_Rnd
             }
         }
 
-
         private void InitPortalPrefab()
         {
             shopPortalPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/PortalShop/PortalShop.prefab").WaitForCompletion();
@@ -284,7 +283,6 @@ namespace An_Rnd
                     Func<ItemIndex, bool> includeAllFilter = _ => true;
                     controller.inventory.AddItemsFrom(latestInventoryItems, includeAllFilter);
                 }
-                
 
                 //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
                 //VoidTele();
@@ -293,11 +291,14 @@ namespace An_Rnd
                 {
                     TeleporterInteraction.instance.AddShrineStack();
                 }
+
+                //increase extraStacks by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
+                if (extraStacksThreshold > 0) extraStacks += TeleporterInteraction.instance.shrineBonusStacks / extraStacksThreshold;
             }
             return orig(self);
         }
 
-        //just to note for future reference, using this caused some wired error. Maybe something else was going on at the time, but for now ill say it does not work
+        //just to note for future reference, using this caused some weird error. Maybe something else was going on at the time, but for now ill say it does not work
         private IEnumerator VoidTele()
         {
             //i want to avoid the teleportor showing up on the objectives list, and i am unsure when and were this happens. could search for a hook, could try this instead
@@ -315,7 +316,7 @@ namespace An_Rnd
 
             //self.StartCoroutine(ChunkRewards(orig, self, pickupIndex));
             // This drops the item after the selection so we just call it as many times as items are needed
-            int total = (TeleporterInteraction.instance.shrineBonusStacks);
+            int total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
             for (int i = 0; i < total; i++)
             {
                 orig(self, pickupIndex);
@@ -324,8 +325,7 @@ namespace An_Rnd
 
         private IEnumerator ChunkRewards(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
-            int totalItems = (TeleporterInteraction.instance.shrineBonusStacks);
-            if (totalItems == 0) totalItems = 1; //if no shrines are active we are in the first run so 1 item
+            int totalItems = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
 
             //if mountain shrines are 0, it should still give 1 item (first run)
             for (int i = 0; i < totalItems; i++)
@@ -345,7 +345,13 @@ namespace An_Rnd
             int[] originalItemStacks = (int[])inv.itemStacks.Clone(); // Clone the current stacks for comparison later
 
             // Call the original method to add the items
-            orig(self);
+            for (int i = 0; i < extraStacks; i++) //extraStacks can be min set to 1. Extra callings of orig, rolls for a new itemStacks and adds it to the ItemPool
+            {
+                orig(self);
+                self.nextItemStackIndex -= 1;
+            }
+            //nextItemStackIndex sets the rarity of the ItemStack rolled for and increase by 1 after orig
+            self.nextItemStackIndex += 1;
 
             latestInventoryItems = new int[inv.itemStacks.Length];
             // Compare the item stacks before and after; This should work a bit more generally than just for 1 item only like the void fields, so i might do something else with it later idk
@@ -353,9 +359,19 @@ namespace An_Rnd
             {
                 if (KillMeOption == false)
                 {
-                    if (inv.itemStacks[i] > originalItemStacks[i])
+                    if (extraItems > 0)
                     {
-                        inv.itemStacks[i] = originalItemStacks[i] + (inv.itemStacks[i] - originalItemStacks[i]) * (TeleporterInteraction.instance.shrineBonusStacks);
+                        // Calculate the shrine bonus stacking, rounded down; This will only work for max ~2 Billion items, but if you manage that ingame it probably does not matter. besides Ror2 stores the items in an intArray which will have the same problem
+                        int bonus = (int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems);
+
+                        // Ensure the enmies get at least 1 item
+                        bonus = Math.Max(bonus, 1);
+
+                        // Apply the bonus to the inventory item stack
+                        if (inv.itemStacks[i] > originalItemStacks[i])
+                        {
+                            inv.itemStacks[i] = originalItemStacks[i] + (inv.itemStacks[i] - originalItemStacks[i]) * bonus;
+                        }
                     }
                 }
                 else
