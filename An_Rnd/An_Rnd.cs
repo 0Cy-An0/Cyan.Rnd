@@ -210,7 +210,7 @@ namespace An_Rnd
                     }
                     else
                     {
-                        Log.Warning("Unable to set Min property.");
+                        Log.Warning($"Unable to set Min property for {config.Definition.Key}");
                     }
 
                     if (maxProperty != null && maxProperty.CanWrite)
@@ -219,7 +219,7 @@ namespace An_Rnd
                     }
                     else
                     {
-                        Log.Warning("Unable to set Max property.");
+                        Log.Warning($"Unable to set Max property for {config.Definition.Key}");
                     }
 
                     Log.Info($"Option {config.Definition.Key} as FloatField");
