@@ -65,6 +65,16 @@ namespace An_Rnd
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
+            On.RoR2.Run.Start += ResetRunVars;
+        }
+
+        private void InitPortalPrefab()
+        {
+            shopPortalPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/PortalShop/PortalShop.prefab").WaitForCompletion();
+            raidPortalPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/PortalArena/PortalArena.prefab").WaitForCompletion();
+            //Change flags, such that Null Portal actually connects to the void fields.
+            raidPortalPrefab.GetComponent<SceneExitController>().useRunNextStageScene = false;
+            teleporterPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/Teleporters/Teleporter1.prefab").WaitForCompletion();
         }
 
         private void TryInitProperSave()
@@ -399,29 +409,12 @@ namespace An_Rnd
             }
         }
 
-        private void InitPortalPrefab()
+        private void ResetRunVars(On.RoR2.Run.orig_Start orig, Run self)
         {
-            shopPortalPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/PortalShop/PortalShop.prefab").WaitForCompletion();
-            raidPortalPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/PortalArena/PortalArena.prefab").WaitForCompletion();
-            //Change flags, such that Null Portal actually connects to the void fields.
-            raidPortalPrefab.GetComponent<SceneExitController>().useRunNextStageScene = false;
-            teleporterPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/Teleporters/Teleporter1.prefab").WaitForCompletion();
+            latestInventoryItems = null;
+            arenaCount = -1;
+            orig(self);
         }
-
-        //The Update() method is run on every frame of the game.
-        /*private void Update()
-        {
-            if (Input.GetKeyDown(KeyCode.F2))
-            {
-                // Get the player body to use a position:
-                var player = PlayerCharacterMasterController.instances[0];
-                var transform = player.master.GetBodyObject().transform;
-                //i do not want to die while testing
-                player.master.godMode = true;
-
-                ForceSpawnPortal(transform.position);
-            }
-        }*/
 
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
@@ -538,13 +531,6 @@ namespace An_Rnd
             }
         }
 
-        private void ForceSpawnPortal(Vector3 position)
-        {
-            // Instantiate the portal prefab at the specified position
-            GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
-            GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
-        }
-
         private void CheckNullPortal(On.RoR2.BazaarController.orig_Start orig, BazaarController self)
         {
             //bit unsure if i should do a serverside check here, i assume not because this hooks into OnStartServer, but who knows; remind me to check here if there is a problem
@@ -577,5 +563,25 @@ namespace An_Rnd
                 GameObject portal = Instantiate(raidPortalPrefab, new Vector3(281.10f, -446.82f, -126.10f), new Quaternion(0.00000f, -0.73274f, 0.00000f, 0.68051f));
             }
         }
+
+        /*private void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.F2))
+            {
+                // Get the player body to use a position:
+                var player = PlayerCharacterMasterController.instances[0];
+                var transform = player.master.GetBodyObject().transform;
+                //i do not want to die while testing
+                player.master.godMode = true;
+
+                ForceSpawnPortal(transform.position);
+            }
+        }
+        private void ForceSpawnPortal(Vector3 position)
+        {
+            // Instantiate the portal prefab at the specified position
+            GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
+            GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
+        }*/
     }
 }
