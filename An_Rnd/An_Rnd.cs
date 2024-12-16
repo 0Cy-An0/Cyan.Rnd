@@ -1,6 +1,4 @@
-using An_Rnd;
 using BepInEx;
-using RiskOfOptions.Options;
 using R2API;
 using RoR2;
 using System;
@@ -8,11 +6,10 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using BepInEx.Configuration;
-using RiskOfOptions;
 using System.Reflection;
 using System.Collections.Generic;
-using ProperSave;
 using ProperSave.Data;
+using System.Linq;
 
 namespace An_Rnd
 {
@@ -22,9 +19,6 @@ namespace An_Rnd
     [BepInDependency(LanguageAPI.PluginGUID)]
 
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
-
-    //Risk of options
-    [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
 
     public class An_Rnd : BaseUnityPlugin
     {
@@ -149,7 +143,28 @@ namespace An_Rnd
                             {
                                 if (savedData.Value is object[] loadedData && loadedData.Length == 2)
                                 {
-                                    latestInventoryItems = loadedData[0] as int[];
+                                    //So apperently ProperSaves loads saved int[] as List<object> (which i kinda had to figure out via Consol Logs, would have probably been more obvious were I to use a more normal method of using ProperSave) so here is a conversion, that i defintily came up with my self and did not ask chatGpt for
+                                    if (loadedData[0] is List<object> objList)
+                                    {
+                                        try
+                                        {
+                                            // Converts List<object> to int[]
+                                            latestInventoryItems = objList.Select(e => Convert.ToInt32(e)).ToArray();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Log.Error($"Failed to convert List<object> to int[]. Exception: {ex.Message}");
+                                            foreach (var item in objList)
+                                            {
+                                                Log.Error($"    Item: {item}, Type: {item?.GetType()}");
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Log.Error($"Could not load latestInventoryItems, because it was not saved as List<object>. {loadedData[0].GetType()} instead");
+                                    }
+                                        
                                     arenaCount = Convert.ToInt32(loadedData[1]);
 
                                     Log.Info($"Loaded latestInventoryItems({latestInventoryItems}) and arenaCount({arenaCount}) with ProperSave.");
