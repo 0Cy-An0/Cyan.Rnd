@@ -18,6 +18,6 @@ Does Random stuff I wanted to have in the game:
 - Remove all Highlights (maybe a button in the Settings?) from new unlocks
 
 bugs/untested:
-- variables persist over new games
+- variables persist over new games (RoR2.Run.Start?)
 - artifact of evolution
 - null portal does not sync to non-host (maybe fixed, can't test right now)

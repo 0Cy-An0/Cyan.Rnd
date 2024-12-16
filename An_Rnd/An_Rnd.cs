@@ -11,6 +11,8 @@ using BepInEx.Configuration;
 using RiskOfOptions;
 using System.Reflection;
 using System.Collections.Generic;
+using ProperSave;
+using ProperSave.Data;
 
 namespace An_Rnd
 {
@@ -63,11 +65,125 @@ namespace An_Rnd
             Log.Init(Logger);
             InitPortalPrefab();
             TryInitRiskOfOptions();
+            TryInitProperSave();
             
             On.RoR2.BazaarController.Start += CheckNullPortal;
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
+        }
+
+        private void TryInitProperSave()
+        {
+            try
+            {
+                // Get the ProperSave SaveFile type dynamically
+                Type properSaveType = Type.GetType("ProperSave.SaveFile, ProperSave");
+                if (properSaveType == null)
+                {
+                    Log.Warning("ProperSave is not available.");
+                    return;
+                }
+
+                Type loadingType = Type.GetType("ProperSave.Loading, ProperSave");
+
+                // Hook into OnGatherSaveData event dynamically
+                EventInfo onGatherSaveDataEvent = properSaveType.GetEvent("OnGatherSaveData");
+                if (onGatherSaveDataEvent != null)
+                {
+                    Action<object> gatherSaveDataHandler = (sender) =>
+                    {
+                        try
+                        {
+                            Log.Info("ProperSave is gathering save data.");
+
+                            // Create a combined array. ProperSave readme said to best save as one
+                            if (sender is IDictionary<string, object> saveDataDictionary)
+                            {
+
+                                // Create a combined array for saving data
+                                object[] saveData = new object[]
+                                {
+                                    latestInventoryItems,
+                                    arenaCount
+                                };
+
+                                // Add the array to the save data dictionary under the PluginGUID key
+                                saveDataDictionary["Cyan"] = saveData;
+
+                                Log.Info("Save data successfully added to ProperSave.");
+                            }
+                            else
+                            {
+                                Log.Error("Could not save data because sender is not expected type");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"Error while trying to save data with ProperSave: {ex.Message}\\n{ex.StackTrace}");
+                        }
+                    };
+
+                    Delegate gatherSaveDataDelegate = Delegate.CreateDelegate(onGatherSaveDataEvent.EventHandlerType, gatherSaveDataHandler.Target, gatherSaveDataHandler.Method);
+                    onGatherSaveDataEvent.AddEventHandler(null, gatherSaveDataDelegate);
+                }
+                else
+                {
+                    Log.Error("Failed to hook into ProperSave.OnGatherSaveData.");
+                }
+
+                // Hook into Loading.OnLoadingStarted event dynamically
+                EventInfo OnLoadingStartedEvent = loadingType.GetEvent("OnLoadingStarted");
+                if (OnLoadingStartedEvent != null)
+                {
+                    Action<object> loadingStartedHandler = (saveFile) =>
+                    {
+                        try
+                        {
+
+                            var saveDataProperty = saveFile.GetType().GetProperty("ModdedData");
+                            var moddedDataDictionary = saveDataProperty.GetValue(saveFile) as IDictionary<string, ModdedData>;
+
+                            // Retrieve saved data
+                            if (moddedDataDictionary.TryGetValue("Cyan", out ModdedData savedData))
+                            {
+                                if (savedData.Value is object[] loadedData && loadedData.Length == 2)
+                                {
+                                    latestInventoryItems = loadedData[0] as int[];
+                                    arenaCount = Convert.ToInt32(loadedData[1]);
+
+                                    Log.Info($"Loaded latestInventoryItems({latestInventoryItems}) and arenaCount({arenaCount}) with ProperSave.");
+                                }
+                                else
+                                {
+                                    Log.Error("Saved data format is invalid or unexpected.");
+                                }
+                            }
+                            else
+                            {
+                                Log.Warning($"No save data found for Cyan.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"Error while loading save data: {ex.Message}\\n{ex.StackTrace}");
+                        }
+                    };
+
+                    Delegate loadingStartedDelegate = Delegate.CreateDelegate(OnLoadingStartedEvent.EventHandlerType, loadingStartedHandler.Target, loadingStartedHandler.Method);
+                    OnLoadingStartedEvent.AddEventHandler(null, loadingStartedDelegate);
+                }
+                else
+                {
+                    Log.Error("Failed to hook into ProperSave.Loading.OnLoadingEnded.");
+                }
+
+                Log.Info("ProperSave integration successfully.");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"An error occurred while initializing ProperSave: {ex.Message}\n{ex.StackTrace}");
+            }
         }
 
         private void TryInitRiskOfOptions()
@@ -112,13 +228,37 @@ namespace An_Rnd
                     10000f
                 ),
                 (
-                    Config.Bind("General", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type."),
+                    Config.Bind("General", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type.\nWill also add all Equipment at the same time\nVoid field rewards are now only lunar items(idk why). Items/Equipment may not show up in the listing but are still present\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON"),
                     typeof(bool),
                     new Action<object>(value => KillMeOption = (bool)value),
                     null, //a bool option does not need a min/max [should be somewhat obvious i guess]
                     null
                 )
             };
+
+            //change from default values if config is already present:
+            foreach ( var (config, type, update, _, _) in configEntries )
+            {
+                if (type == typeof(int))
+                {
+                    ConfigEntry<int> castConfig = (ConfigEntry<int>)config;
+                    update(castConfig.Value);
+                }
+                else if (type == typeof(float))
+                {
+                    ConfigEntry<float> castConfig = (ConfigEntry<float>)config;
+                    update(castConfig.Value);
+                }
+                else if (type == typeof(bool))
+                {
+                    ConfigEntry<bool> castConfig = (ConfigEntry<bool>)config;
+                    update(castConfig.Value);
+                }
+                else
+                {
+                    Log.Error($"{config.Definition.Key} is of invalid type: {type}");
+                }
+            }
 
             try
             {
@@ -176,7 +316,7 @@ namespace An_Rnd
                 }
                 else
                 {
-                    Log.Warning($"Could not get type {StaticType} to hook SettingChanged for {config.Definition.Key}");
+                    Log.Error($"Could not get type {StaticType} to hook SettingChanged for {config.Definition.Key}");
                 }
             }
         }
@@ -376,7 +516,7 @@ namespace An_Rnd
                 }
                 else
                 {
-                    inv.itemStacks[i] = originalItemStacks[i] + TeleporterInteraction.instance.shrineBonusStacks;
+                    inv.itemStacks[i] += Math.Max((int) Math.Floor(TeleporterInteraction.instance.shrineBonusStacks *  extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
                 }
                 
                 latestInventoryItems[i] = inv.itemStacks[i];
