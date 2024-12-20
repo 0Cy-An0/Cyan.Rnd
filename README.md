@@ -1,6 +1,7 @@
 # Cy/an Random
 
 Does Random stuff I wanted to have in the game:
+ - Remove all Highlights from new unlocks (this is a option in the Settings)
  - Void Field portal is usable more than once
     - Monster inherit Items from previous Void Field stages
     - extra Void Field stages increase item drops and monster items
@@ -9,13 +10,16 @@ Does Random stuff I wanted to have in the game:
         - items can still only be selected once per player but will drop multiplied after selection
         - Additional Items might fall of the edge. This is Intended. (in so far that i can't be bother to make it so that the items don't explode)
  - config with RiskOfOptions (this is optional, the mod will automatically use it if available. Otherwise you have to set the config yourself)
- - save with ProperSave (this too is optional)
+ - saves with ProperSave (this too is optional)
 
  Currently just ideas:
  
  - void field stuff
     - might add a option to get all three items via round robin
-- Remove all Highlights (maybe a button in the Settings?) from new unlocks
+    - Option to get more monsters
+    - option to give dir mor credits per moutain shrine
+    - mountain shrine optional
+    - exponential scaling option
 
 bugs/untested:
 - artifact of evolution

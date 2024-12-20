@@ -10,6 +10,9 @@ using System.Reflection;
 using System.Collections.Generic;
 using ProperSave.Data;
 using System.Linq;
+using IL.RoR2.UI.LogBook;
+using System.Diagnostics;
+using RoR2.UI.LogBook;
 
 namespace An_Rnd
 {
@@ -51,6 +54,8 @@ namespace An_Rnd
         public static bool KillMeOption = false;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
         public static int[] latestInventoryItems;
+        //Will remove all pre-game(logbook, select, etc.) Hightlights automatically if true
+        public static bool NoHightlights = false;
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -66,6 +71,13 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
+            On.RoR2.UserProfile.HasViewedViewable += Viewed;
+        }
+
+        private bool Viewed(On.RoR2.UserProfile.orig_HasViewedViewable orig, UserProfile self, string viewableName)
+        {
+            if (NoHightlights) return true;
+            return orig(self, viewableName);
         }
 
         private void InitPortalPrefab()
@@ -218,42 +230,49 @@ namespace An_Rnd
             var configEntries = new List<(ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar, object min, object max)>
             {
                 (
-                    Config.Bind("General", "Number of Shrines", 5, "Number of shrines activated per additional void field entry."),
+                    Config.Bind("General", "No Hightlights", false, "If enabled, anytime the game asks if you have viewed a 'viewable' it will skip the check and return true.\nThis should effect things like logbook entries and new characters/abilities in the select screen"),
+                    typeof(bool),
+                    new Action<object>(value => NoHightlights = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("Void Fields", "Number of Shrines", 5, "Number of shrines activated per additional void field entry."),
                     typeof(int),
                     new Action<object>(value => numShrines = (int)value),
                     0,
                     10000
                 ),
                 (
-                    Config.Bind("General", "Enemy ItemStacks", 1, "Sets the number of itemStacks the void fields enemies can obtain.\n1 per activation is vanilla, but with this you can get for example goat's hoof and crit classes at the same time\ndisabled if Kill Me is checked"),
+                    Config.Bind("Void Fields", "Enemy ItemStacks", 1, "Sets the number of itemStacks the void fields enemies can obtain.\n1 per activation is vanilla, but with this you can get for example goat's hoof and crit classes at the same time\ndisabled if Kill Me is checked"),
                     typeof(int),
                     new Action<object>(value => extraStacks = (int)value),
                     1,
                     1000
                 ),
                 (
-                    Config.Bind("General", "Enemy Extra ItemStacks Threshold", 0, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks'.\n0 for disabled"),
+                    Config.Bind("Void Fields", "Enemy Extra ItemStacks Threshold", 0, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks'.\n0 for disabled"),
                     typeof(int),
                     new Action<object>(value => extraStacksThreshold = (int)value),
                     0,
                     10000
                 ),
                 (
-                    Config.Bind("General", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine.\n0 for disable"),
+                    Config.Bind("Void Fields", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine.\n0 for disable"),
                     typeof(float),
                     new Action<object>(value => extraItems = (float)value),
                     0f,
                     10000f
                 ),
                 (
-                    Config.Bind("General", "Reward Item Multiplier per Shrine", 1f, "Multiplier for void field rewards per active shrine.\n0 for disable"),
+                    Config.Bind("Void Fields", "Reward Item Multiplier per Shrine", 1f, "Multiplier for void field rewards per active shrine.\n0 for disable"),
                     typeof(float),
                     new Action<object>(value => extraRewards = (float)value),
                     0f,
                     10000f
                 ),
                 (
-                    Config.Bind("General", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type.\nWill also add all Equipment at the same time\nVoid field rewards are now only lunar items(idk why). Items/Equipment may not show up in the listing but are still present\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON"),
+                    Config.Bind("Void Fields", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type.\nWill also add all Equipment at the same time\nVoid field rewards are now only lunar items(idk why). Items/Equipment may not show up in the listing but are still present\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON"),
                     typeof(bool),
                     new Action<object>(value => KillMeOption = (bool)value),
                     null, //a bool option does not need a min/max [should be somewhat obvious i guess]
