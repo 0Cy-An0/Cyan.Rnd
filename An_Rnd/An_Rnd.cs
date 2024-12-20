@@ -10,9 +10,6 @@ using System.Reflection;
 using System.Collections.Generic;
 using ProperSave.Data;
 using System.Linq;
-using IL.RoR2.UI.LogBook;
-using System.Diagnostics;
-using RoR2.UI.LogBook;
 
 namespace An_Rnd
 {
@@ -50,6 +47,8 @@ namespace An_Rnd
         public static int extraMonsterTypes = 1;
         //How many shrines need to be active for the above option to increase by 1. Will set on entry to active / Threshold (int div). [you may notice some of these comments may be almost to entirely copy-paste]
         public static int extraMonsterTypesThreshold = 0;
+        //how many credits are added per active shrine to the arena base credits
+        public static int extraMonsterCredits = 0;
         //How many extra items are given to the enemies per active mountain shrine (Rounded down based on the number normally given)
         public static float extraItems = 0f;
         //How many items are spawned after picking per active mountain shrine (Rounded down, because i can't spawn fractions of items)
@@ -263,7 +262,7 @@ namespace An_Rnd
                     10000
                 ),
                 (
-                    Config.Bind("Void Fields", "Monsters", 1, "Sets the number of Monsters the void fields add at once."),
+                    Config.Bind("Void Fields", "Monsters", 1, "Sets the number of Monsters the void fields add at once.\nCurrently Broken\nCurrently Broken"),
                     typeof(int),
                     new Action<object>(value => extraMonsterTypes = (int)value),
                     1,
@@ -275,6 +274,13 @@ namespace An_Rnd
                     new Action<object>(value => extraMonsterTypesThreshold = (int)value),
                     0,
                     10000
+                ),
+                (
+                    Config.Bind("Void Fields", "Extra Credits", 0, "How many extra credits are given to the void fields per active mountain shrine\n0 for disabled[i mean x+0=x...]"),
+                    typeof(int),
+                    new Action<object>(value => extraMonsterCredits = (int)value),
+                    0,
+                    100000
                 ),
                 (
                     Config.Bind("Void Fields", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine.\n0 for disable"),
@@ -460,11 +466,11 @@ namespace An_Rnd
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
                 arenaCount += 1; //counter how often we entered the void fields
+                ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
 
                 //this should start the enemies with the items of the last attempts
                 if (latestInventoryItems != null)
                 {
-                    ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
                     // AddItemsFrom is a overloaded method, wich needs a filter to accept int[] as input; but we just want everything
                     Func<ItemIndex, bool> includeAllFilter = _ => true;
                     controller.inventory.AddItemsFrom(latestInventoryItems, includeAllFilter);
@@ -477,7 +483,8 @@ namespace An_Rnd
                 {
                     TeleporterInteraction.instance.AddShrineStack();
                 }
-
+                //adding the extra Credits from the config
+                controller.baseMonsterCredit += extraMonsterCredits * TeleporterInteraction.instance.shrineBonusStacks;
             }
             return orig(self);
         }
@@ -625,6 +632,7 @@ namespace An_Rnd
                 ForceSpawnPortal(transform.position);
             }
         }
+
         private void ForceSpawnPortal(Vector3 position)
         {
             // Instantiate the portal prefab at the specified position
