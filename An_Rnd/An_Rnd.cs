@@ -45,11 +45,15 @@ namespace An_Rnd
         //How many times the void fields roll for items per activiation. Every rolled item stays!
         public static int extraStacks = 1;
         //How many shrines need to be active for the above option to increase by 1. Will set on entry to active / Threshold (int div).
-        public static int extraStacksThreshold = 1;
+        public static int extraStacksThreshold = 0;
+        //How many times the void fields roll for monsters per activition. Every rolled monster stays!
+        public static int extraMonsterTypes = 1;
+        //How many shrines need to be active for the above option to increase by 1. Will set on entry to active / Threshold (int div). [you may notice some of these comments may be almost to entirely copy-paste]
+        public static int extraMonsterTypesThreshold = 0;
         //How many extra items are given to the enemies per active mountain shrine (Rounded down based on the number normally given)
-        public static float extraItems = 1f;
+        public static float extraItems = 0f;
         //How many items are spawned after picking per active mountain shrine (Rounded down, because i can't spawn fractions of items)
-        public static float extraRewards = 1f;
+        public static float extraRewards = 0f;
         //Super Secret Option
         public static bool KillMeOption = false;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
@@ -69,6 +73,7 @@ namespace An_Rnd
             On.RoR2.BazaarController.Start += CheckNullPortal;
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
+            On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
@@ -251,9 +256,23 @@ namespace An_Rnd
                     1000
                 ),
                 (
-                    Config.Bind("Void Fields", "Enemy Extra ItemStacks Threshold", 0, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks'.\n0 for disabled"),
+                    Config.Bind("Void Fields", "Enemy Extra ItemStacks Threshold", 0, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks' by 1.\n0 for disabled"),
                     typeof(int),
                     new Action<object>(value => extraStacksThreshold = (int)value),
+                    0,
+                    10000
+                ),
+                (
+                    Config.Bind("Void Fields", "Monsters", 1, "Sets the number of Monsters the void fields add at once."),
+                    typeof(int),
+                    new Action<object>(value => extraMonsterTypes = (int)value),
+                    1,
+                    1000
+                ),
+                (
+                    Config.Bind("Void Fields", "Monsters Threshold", 0, "Number of mountain shrines required to increase 'Monsters' by 1.\n0 for disabled"),
+                    typeof(int),
+                    new Action<object>(value => extraMonsterTypesThreshold = (int)value),
                     0,
                     10000
                 ),
@@ -459,8 +478,6 @@ namespace An_Rnd
                     TeleporterInteraction.instance.AddShrineStack();
                 }
 
-                //increase extraStacks by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
-                if (extraStacksThreshold > 0) extraStacks += TeleporterInteraction.instance.shrineBonusStacks / extraStacksThreshold;
             }
             return orig(self);
         }
@@ -480,9 +497,6 @@ namespace An_Rnd
 
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
-
-            //self.StartCoroutine(ChunkRewards(orig, self, pickupIndex));
-            // This drops the item after the selection so we just call it as many times as items are needed
             int total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
             for (int i = 0; i < total; i++)
             {
@@ -511,8 +525,12 @@ namespace An_Rnd
             // Track how many items are being added by checking the previous state (before adding new items)
             int[] originalItemStacks = (int[])inv.itemStacks.Clone(); // Clone the current stacks for comparison later
 
+            //increase extraStacks by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
+            int totalStacks = extraStacks;
+            if (extraStacksThreshold > 0) totalStacks += TeleporterInteraction.instance.shrineBonusStacks / extraStacksThreshold;
+
             // Call the original method to add the items
-            for (int i = 0; i < extraStacks; i++) //extraStacks can be min set to 1. Extra callings of orig, rolls for a new itemStacks and adds it to the ItemPool
+            for (int i = 0; i < totalStacks; i++) //extraStacks can be min set to 1. Extra callings of orig, rolls for a new itemStacks and adds it to the ItemPool
             {
                 orig(self);
                 self.nextItemStackIndex -= 1;
@@ -547,6 +565,17 @@ namespace An_Rnd
                 }
                 
                 latestInventoryItems[i] = inv.itemStacks[i];
+            }
+        }
+
+        private void MultiplyEnemyType(On.RoR2.ArenaMissionController.orig_AddMonsterType orig, ArenaMissionController self)
+        {
+            //increase MonsterTypes by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
+            int total = extraMonsterTypes;//'extra' MonsterTypes is at least 1
+            if (extraStacksThreshold > 0) total += TeleporterInteraction.instance.shrineBonusStacks / extraMonsterTypesThreshold;
+            for (int i = 0; i < total; i++)
+            {
+                orig(self);
             }
         }
 
