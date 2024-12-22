@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Collections.Generic;
 using ProperSave.Data;
 using System.Linq;
+using UnityEngine.Networking;
 
 namespace An_Rnd
 {
@@ -69,7 +70,7 @@ namespace An_Rnd
             TryInitRiskOfOptions();
             TryInitProperSave();
             
-            On.RoR2.BazaarController.Start += CheckNullPortal;
+            On.RoR2.BazaarController.OnStartServer += CheckNullPortal;
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
@@ -586,9 +587,8 @@ namespace An_Rnd
             }
         }
 
-        private void CheckNullPortal(On.RoR2.BazaarController.orig_Start orig, BazaarController self)
+        private void CheckNullPortal(On.RoR2.BazaarController.orig_OnStartServer orig, BazaarController self)
         {
-            //bit unsure if i should do a serverside check here, i assume not because this hooks into OnStartServer, but who knows; remind me to check here if there is a problem
             orig(self);
             self.StartCoroutine(CheckNullDelay());
 
@@ -616,7 +616,14 @@ namespace An_Rnd
             {
                 //I copied Vector/Quaternion directly by getting them from the vanilla spawn, so it should be the same
                 GameObject portal = Instantiate(raidPortalPrefab, new Vector3(281.10f, -446.82f, -126.10f), new Quaternion(0.00000f, -0.73274f, 0.00000f, 0.68051f));
+                SyncObject(portal);
             }
+        }
+
+        [Server]
+        private void SyncObject(GameObject obj)
+        {
+            NetworkServer.Spawn(obj); //this should sync the object to all
         }
 
         /*private void Update()

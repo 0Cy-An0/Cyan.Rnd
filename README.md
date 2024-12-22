@@ -23,6 +23,6 @@ Does Random stuff I wanted to have in the game:
 
 bugs/untested:
 - artifact of evolution
-- null portal does not sync to non-host (maybe fixed, can't test right now)
 - what happens with other orbs (like the void field rewards, there is currently no check were you are so if you get them somehwere else it should also give multiplied rewards)
 - adding more than 5 monster types breaks. (it seems like there are only 5 directors and every new monster should get its own one)
+- ProperSave (multiplayer/other mods, does not work; does not load inventory)
