@@ -60,6 +60,8 @@ namespace An_Rnd
         public static int[] latestInventoryItems;
         //Will remove all pre-game(logbook, select, etc.) Hightlights automatically if true
         public static bool NoHightlights = false;
+        //Need a way to keep track if properSave was used. (relevant in 'ResetRunVars')
+        public static bool wasLoaded = false;
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -69,7 +71,7 @@ namespace An_Rnd
             InitPortalPrefab();
             TryInitRiskOfOptions();
             TryInitProperSave();
-            
+
             On.RoR2.BazaarController.OnStartServer += CheckNullPortal;
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
@@ -121,7 +123,6 @@ namespace An_Rnd
                             // Create a combined array. ProperSave readme said to best save as one
                             if (sender is IDictionary<string, object> saveDataDictionary)
                             {
-
                                 // Create a combined array for saving data
                                 object[] saveData = new object[]
                                 {
@@ -159,11 +160,28 @@ namespace An_Rnd
                 {
                     Action<object> loadingStartedHandler = (saveFile) =>
                     {
+                        //I had i weird error with the saveFile so i am adding a bunch of checks which will probably stay
+                        if (saveFile == null)
+                        {
+                            Log.Error("saveFile is null.");
+                            return;
+                        }
+
                         try
                         {
 
                             var saveDataProperty = saveFile.GetType().GetProperty("ModdedData");
+                            if (saveDataProperty == null)
+                            {
+                                Log.Error("ModdedData property not found on saveFile.");
+                                return;
+                            }
                             var moddedDataDictionary = saveDataProperty.GetValue(saveFile) as IDictionary<string, ModdedData>;
+                            if (moddedDataDictionary == null)
+                            {
+                                Log.Error("ModdedData dictionary is null.");
+                                return;
+                            }
 
                             // Retrieve saved data
                             if (moddedDataDictionary.TryGetValue("Cyan", out ModdedData savedData))
@@ -191,10 +209,11 @@ namespace An_Rnd
                                     {
                                         Log.Error($"Could not load latestInventoryItems, because it was not saved as List<object>. {loadedData[0].GetType()} instead");
                                     }
-                                        
-                                    arenaCount = Convert.ToInt32(loadedData[1]);
 
-                                    Log.Info($"Loaded latestInventoryItems({latestInventoryItems}) and arenaCount({arenaCount}) with ProperSave.");
+                                    arenaCount = Convert.ToInt32(loadedData[1]);
+                                    wasLoaded = true; //this is so that the loaded variables are not reset for 'a new run'
+
+                                    Log.Info($"Loaded latestInventoryItems and arenaCount({arenaCount}) with ProperSave.");
                                 }
                                 else
                                 {
@@ -307,7 +326,7 @@ namespace An_Rnd
             };
 
             //change from default values if config is already present:
-            foreach ( var (config, type, update, _, _) in configEntries )
+            foreach (var (config, type, update, _, _) in configEntries)
             {
                 if (type == typeof(int))
                 {
@@ -366,12 +385,12 @@ namespace An_Rnd
             }
 
             // Hook setting changes dynamically
-            foreach (var (config, StaticType, updateStaticVar, _ , _) in configEntries)
+            foreach (var (config, StaticType, updateStaticVar, _, _) in configEntries)
             {
                 // Cast to the specific type of ConfigEntry<T> dynamically
                 if (StaticType == typeof(int))
                 {
-                    ConfigEntry<int> castConfig = (ConfigEntry<int>) config;
+                    ConfigEntry<int> castConfig = (ConfigEntry<int>)config;
                     castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
                 }
                 else if (StaticType == typeof(float))
@@ -401,8 +420,8 @@ namespace An_Rnd
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.IntSliderOption, RiskOfOptions");
                     Type configType = Type.GetType("RiskOfOptions.OptionConfigs.IntSliderConfig, RiskOfOptions");
                     object configInstance = Activator.CreateInstance(configType);
-                    configType.GetField("min")?.SetValue(configInstance, (int) min);
-                    configType.GetField("max")?.SetValue(configInstance, (int) max);
+                    configType.GetField("min")?.SetValue(configInstance, (int)min);
+                    configType.GetField("max")?.SetValue(configInstance, (int)max);
                     Log.Info($"Option {config.Definition.Key} as IntSlider");
                     return Activator.CreateInstance(baseOptionType, config, configInstance);
                 }
@@ -456,6 +475,12 @@ namespace An_Rnd
 
         private void ResetRunVars(On.RoR2.Run.orig_Start orig, Run self)
         {
+            if (wasLoaded)
+            {
+                wasLoaded = false;
+                orig(self);
+                return;
+            }
             latestInventoryItems = null;
             arenaCount = -1;
             orig(self);
@@ -495,7 +520,7 @@ namespace An_Rnd
         {
             //i want to avoid the teleportor showing up on the objectives list, and i am unsure when and were this happens. could search for a hook, could try this instead
             yield return new WaitForSeconds(0.1f);
-            
+
             GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
             for (int i = 0; i < arenaCount * numShrines; i++)
             {
@@ -569,9 +594,9 @@ namespace An_Rnd
                 }
                 else
                 {
-                    inv.itemStacks[i] += Math.Max((int) Math.Floor(TeleporterInteraction.instance.shrineBonusStacks *  extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
+                    inv.itemStacks[i] += Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
                 }
-                
+
                 latestInventoryItems[i] = inv.itemStacks[i];
             }
         }
