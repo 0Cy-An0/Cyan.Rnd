@@ -25,4 +25,3 @@ bugs/untested:
 - artifact of evolution
 - what happens with other orbs (like the void field rewards, there is currently no check were you are so if you get them somehwere else it should also give multiplied rewards)
 - adding more than 5 monster types breaks. (it seems like there are only 5 directors and every new monster should get its own one)
-- ProperSave (multiplayer/other mods, does not work; does not load inventory)
