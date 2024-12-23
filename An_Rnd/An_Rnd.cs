@@ -99,18 +99,9 @@ namespace An_Rnd
                     orig(self);
                     ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
 
-                    //set the charge for the next round to the current maxCharge + 1%
-                    controller.nullWards[controller.currentRound].GetComponent<HoldoutZoneController>().charge = maxCharge + 0.01f;
-                    //deactive the current Zone; or more like blanket disable all components of the current cell, it should do nothing anymore anyways
-                    GameObject CellVent = controller.nullWards[controller.currentRound - 1];
-                    CellVent.GetComponent<HoldoutZoneController>().enabled = false;
-                    //disables all children but the model of the cell vent; which includes most importantly the light beacon, which i could not find to remove otherwise
-                    for (int i = CellVent.transform.childCount - 1; i > 0; i--)
-                    {
-                        CellVent.transform.GetChild(i).gameObject.SetActive(false);
-                    }
-
-                    controller.EndRound();
+                    //set the charge for the next round to the current maxCharge
+                    controller.nullWards[controller.currentRound].GetComponent<HoldoutZoneController>().charge = maxCharge;
+                    self.FullyChargeHoldoutZone();
                 }
                 else
                 {
@@ -132,6 +123,7 @@ namespace An_Rnd
             orig(self);
             //should adjust the radius of the zone for charging this void cell
             self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>().baseRadius *= voidRadius;
+            self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>().baseChargeDuration *= 0.5f;
         }
 
         private bool Viewed(On.RoR2.UserProfile.orig_HasViewedViewable orig, UserProfile self, string viewableName)
