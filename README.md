@@ -11,6 +11,7 @@ Does Random stuff I wanted to have in the game:
         - reward items can still only be selected once per player but will drop multiplied after selection
             - Additional Items might fall of the edge. This is Intended. (in so far that i can't be bother to make it so that the items don't explode)
         - there is a option to get more monsters instead of just 1 type added
+    - various speed and cell percentage Settings
  - config with RiskOfOptions (this is optional, the mod will automatically use it if available. Otherwise you have to set the config yourself)
  - saves with ProperSave (this too is optional)
 

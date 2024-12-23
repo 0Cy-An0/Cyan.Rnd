@@ -63,8 +63,14 @@ namespace An_Rnd
         public static bool NoHightlights = false;
         //Need a way to keep track if properSave was used. (relevant in 'ResetRunVars')
         public static bool wasLoaded = false;
-        //max charge for current zone (void fields)
-        public static float maxCharge = 0f;
+        //max charge for all 9 cells (void fields)
+        public static float[] maxCharges = [0.11f, 0.22f, 0.33f, 0.44f, 0.55f, 0.66f, 0.77f, 0.88f, 1f];
+        //starting charge for all 9 cells (void fields)
+        public static float[] startCharges = [0f, 0.11f, 0.22f, 0.33f, 0.44f, 0.55f, 0.66f, 0.77f, 0.88f];
+        //charge duration multiplier (void fields)
+        public static float chargeDurationMult = 0f;
+        //current cell Counter for the void fields; used for 'maxCharges'
+        public static int currentCell = 0;
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -93,14 +99,11 @@ namespace An_Rnd
             //Custom charge logic only applies in the void fields, otherwise the normal tp would be affected
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
-                if (self.charge <= maxCharge) orig(self);
-                else if (self.charge < 0.99f) //if it works correctly this if branched should only be reached once per controller after which it disables itself
+                if (self.charge <= maxCharges[currentCell]) orig(self);
+                else if (self.charge < 0.99f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
                 {
                     orig(self);
                     ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
-
-                    //set the charge for the next round to the current maxCharge
-                    controller.nullWards[controller.currentRound].GetComponent<HoldoutZoneController>().charge = maxCharge;
                     self.FullyChargeHoldoutZone();
                 }
                 else
@@ -119,11 +122,12 @@ namespace An_Rnd
 
         private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
         {
-            maxCharge += 0.11f; //this zone should charge 11% more than the previous one
             orig(self);
             //should adjust the radius of the zone for charging this void cell
-            self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>().baseRadius *= voidRadius;
-            self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>().baseChargeDuration *= 0.5f;
+            HoldoutZoneController cell = self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>();
+            cell.baseRadius *= voidRadius;
+            cell.baseChargeDuration *= chargeDurationMult;
+            cell.charge = startCharges[currentCell];
         }
 
         private bool Viewed(On.RoR2.UserProfile.orig_HasViewedViewable orig, UserProfile self, string viewableName)
@@ -369,12 +373,146 @@ namespace An_Rnd
                     10000f
                 ),
                 (
+                    Config.Bind("Void Fields", "Void Cell Charge duration", 0.5f, "Multiplies the base charge duration with the given number"),
+                    typeof(float),
+                    new Action<object>(value => chargeDurationMult = (float)value),
+                    0.0001f,
+                    1000f
+                ),
+                ( //i wanted to add these via a loop but that caused some wierd error with RiskOfOptions...
+                    Config.Bind("Void Fields", "Void Cell 1 start Charge", 0f, "The void cell starts at the given percentage for Cell 1"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[0] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 1 max Charge", 0.11f, "At the given percent, the void cell instantly finishes for Cell 1"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[0] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 2 start Charge", 0.11f, "The void cell starts at the given percentage for Cell 2"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[1] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 2 max Charge", 0.22f, "At the given percent, the void cell instantly finishes for Cell 2"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[1] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 3 start Charge", 0.22f, "The void cell starts at the given percentage for Cell 3"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[2] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 3 max Charge", 0.33f, "At the given percent, the void cell instantly finishes for Cell 3"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[2] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 4 start Charge", 0.33f, "The void cell starts at the given percentage for Cell 4"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[3] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 4 max Charge", 0.44f, "At the given percent, the void cell instantly finishes for Cell 4"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[3] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 5 start Charge", 0.44f, "The void cell starts at the given percentage for Cell 5"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[4] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 5 max Charge", 0.55f, "At the given percent, the void cell instantly finishes for Cell 5"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[4] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 6 start Charge", 0.55f, "The void cell starts at the given percentage for Cell 6"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[5] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 6 max Charge", 0.66f, "At the given percent, the void cell instantly finishes for Cell 6"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[5] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 7 start Charge", 0.66f, "The void cell starts at the given percentage for Cell 7"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[6] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 7 max Charge", 0.77f, "At the given percent, the void cell instantly finishes for Cell 7"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[6] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 8 start Charge", 0.77f, "The void cell starts at the given percentage for Cell 8"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[7] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 8 max Charge", 0.88f, "At the given percent, the void cell instantly finishes for Cell 8"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[7] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 9 start Charge", 0.88f, "The void cell starts at the given percentage for Cell 9"),
+                    typeof(float),
+                    new Action<object>(value => startCharges[8] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
+                    Config.Bind("Void Fields", "Void Cell 9 max Charge", 1f, "At the given percent, the void cell instantly finishes for Cell 9"),
+                    typeof(float),
+                    new Action<object>(value => maxCharges[8] = (float)value),
+                    0f,
+                    1f
+                ),
+                (
                     Config.Bind("Void Fields", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type.\nWill also add all Equipment at the same time\nVoid field rewards are now only lunar items(idk why). Items/Equipment may not show up in the listing but are still present\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON"),
                     typeof(bool),
                     new Action<object>(value => KillMeOption = (bool)value),
                     null, //a bool option does not need a min/max [should be somewhat obvious i guess]
                     null
                 )
+
             };
 
             //change from default values if config is already present:
@@ -544,7 +682,7 @@ namespace An_Rnd
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
                 arenaCount += 1; //counter how often we entered the void fields
-                maxCharge = 0f; //we reset maxCharge so that each cell can add 11% to the total for 99[100]% at the end
+                currentCell = 0; //reset current Cell counter; example use in 'ActivateCell' and 'ZoneCharge'
                 ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
                 
                 //this should start the enemies with the items of the last attempts
