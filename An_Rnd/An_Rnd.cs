@@ -94,48 +94,6 @@ namespace An_Rnd
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
         }
 
-        public void ZoneCharge(On.RoR2.HoldoutZoneController.orig_Update orig, HoldoutZoneController self)
-        {
-            //Custom charge logic only applies in the void fields, otherwise the normal tp would be affected
-            if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
-            {
-                if (self.charge <= maxCharges[currentCell]) orig(self);
-                else if (self.charge < 0.99f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
-                {
-                    orig(self);
-                    ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
-                    self.FullyChargeHoldoutZone();
-                }
-                else
-                {
-                    //this should be last cell; maybe not even but just to be sure
-                    orig(self);
-                }
-            }
-            else
-            {
-                //this should be the normal teleporter
-                orig(self);
-            }
-            
-        }
-
-        private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
-        {
-            orig(self);
-            //should adjust the radius of the zone for charging this void cell
-            HoldoutZoneController cell = self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>();
-            cell.baseRadius *= voidRadius;
-            cell.baseChargeDuration *= chargeDurationMult;
-            cell.charge = startCharges[currentCell];
-        }
-
-        private bool Viewed(On.RoR2.UserProfile.orig_HasViewedViewable orig, UserProfile self, string viewableName)
-        {
-            if (NoHightlights) return true;
-            return orig(self, viewableName);
-        }
-
         private void InitPortalPrefab()
         {
             shopPortalPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/PortalShop/PortalShop.prefab").WaitForCompletion();
@@ -296,6 +254,7 @@ namespace An_Rnd
             }
         }
 
+        //also adds the config first (thought i should note that, as its not quite in the name); remind me to make this a different method for readability probably a good idea for some time later
         private void TryInitRiskOfOptions()
         {
             // Define the List to store ConfigEntry, Typing, the corresponding update action for the static variable and min/max for the slider/field
@@ -373,7 +332,7 @@ namespace An_Rnd
                     10000f
                 ),
                 (
-                    Config.Bind("Void Fields", "Void Cell Charge duration", 0.5f, "Multiplies the base charge duration with the given number"),
+                    Config.Bind("Void Fields", "Void Cell Charge duration", 2f, "Multiplies the base charge duration with the given number\nDefault is 2, which is twice as long, because by default settings all cells only need 11%. All in all you go from 0 to 100% once only for a total speed increase of 4.5(if i mathed(?) correctly)"),
                     typeof(float),
                     new Action<object>(value => chargeDurationMult = (float)value),
                     0.0001f,
@@ -663,6 +622,39 @@ namespace An_Rnd
             }
         }
 
+        //below this comment are hooks and stuff, above should only be awake/Init type stuff. (very good explain: me)
+        public void ZoneCharge(On.RoR2.HoldoutZoneController.orig_Update orig, HoldoutZoneController self)
+        {
+            //Custom charge logic only applies in the void fields, otherwise the normal tp would be affected
+            if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
+            {
+                if (self.charge <= maxCharges[currentCell]) orig(self);
+                else if (self.charge < 0.99f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
+                {
+                    orig(self);
+                    ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
+                    self.FullyChargeHoldoutZone();
+                }
+                else
+                {
+                    //this should be last cell; maybe not even but just to be sure
+                    orig(self);
+                }
+            }
+            else
+            {
+                //this should be the normal teleporter
+                orig(self);
+            }
+
+        }
+
+        private bool Viewed(On.RoR2.UserProfile.orig_HasViewedViewable orig, UserProfile self, string viewableName)
+        {
+            if (NoHightlights) return true;
+            return orig(self, viewableName);
+        }
+
         private void ResetRunVars(On.RoR2.Run.orig_Start orig, Run self)
         {
             if (wasLoaded)
@@ -744,6 +736,17 @@ namespace An_Rnd
             }
         }
 
+        private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
+        {
+            orig(self);
+            currentCell += 1; //increase counter cuse thing happened
+            //should adjust based on all the settings
+            HoldoutZoneController cell = self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>();
+            cell.baseRadius *= voidRadius;
+            cell.baseChargeDuration *= chargeDurationMult;
+            cell.charge = startCharges[currentCell];
+        }
+
         private void MultiplyEnemyItem(On.RoR2.ArenaMissionController.orig_AddItemStack orig, ArenaMissionController self)
         {
             Inventory inv = self.inventory;
@@ -802,9 +805,40 @@ namespace An_Rnd
             for (int i = 0; i < total; i++)
             {
                 //every Monster gets its own director from this array so every called instance over 1, needs to clone a directory
-                //CombatDirector[] directors = self.combatDirectors;
+                CombatDirector[] directors = self.combatDirectors;
+                CompareDirectors(directors);
                 //self.currentRound <- this should decide which to clone if they are indeed different, if they are the same then just make it longer
                 orig(self);
+            }
+        }
+
+        public static void CompareDirectors(CombatDirector[] directors)
+        {
+            for (int i = 0; i < directors.Length - 1; i++)
+            {
+                var currentDirector = directors[i];
+                var nextDirector = directors[i + 1];
+
+                Debug.Log($"Comparing directors at index {i} and {i + 1}:");
+
+                if (currentDirector.customName != nextDirector.customName)
+                    Debug.Log($"- customName: {currentDirector.customName} vs {nextDirector.customName}");
+
+                if (currentDirector.monsterCredit != nextDirector.monsterCredit)
+                    Debug.Log($"- monsterCredit: {currentDirector.monsterCredit} vs {nextDirector.monsterCredit}");
+
+                if (currentDirector.refundedMonsterCredit != nextDirector.refundedMonsterCredit)
+                    Debug.Log($"- refundedMonsterCredit: {currentDirector.refundedMonsterCredit} vs {nextDirector.refundedMonsterCredit}");
+
+                if (currentDirector.expRewardCoefficient != nextDirector.expRewardCoefficient)
+                    Debug.Log($"- expRewardCoefficient: {currentDirector.expRewardCoefficient} vs {nextDirector.expRewardCoefficient}");
+
+                if (currentDirector.goldRewardCoefficient != nextDirector.goldRewardCoefficient)
+                    Debug.Log($"- goldRewardCoefficient: {currentDirector.goldRewardCoefficient} vs {nextDirector.goldRewardCoefficient}");
+
+                // Add more field comparisons as needed
+
+                Debug.Log("End of differences.\n");
             }
         }
 
