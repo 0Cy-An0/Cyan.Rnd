@@ -118,6 +118,11 @@ namespace An_Rnd
                     orig(self);
                 }
             }
+            else
+            {
+                //this should be the normal teleporter
+                orig(self);
+            }
             
         }
 
