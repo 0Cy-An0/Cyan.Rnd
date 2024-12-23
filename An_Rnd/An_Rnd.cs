@@ -35,7 +35,6 @@ namespace An_Rnd
 
         public static int arenaCount = -1; //this will count how many times the void fields were entered; just using the name convention of base RoR2 for the stage
         //starts at -1 so that first entry is 0
-
         //Will make this a riskofOptionsOption, probably, in the future; If this even does anything by then, which it does not currenlty, while i am adding Options
         public static int chunkSize = 50;
         //how many shrines shall activate per entry of the fields; first entry is always base game 0
@@ -54,6 +53,8 @@ namespace An_Rnd
         public static float extraItems = 0f;
         //How many items are spawned after picking per active mountain shrine (Rounded down, because i can't spawn fractions of items)
         public static float extraRewards = 0f;
+        //will be multiplied to the base radius of the void cells
+        public static float voidRadius = 1f;
         //Super Secret Option
         public static bool KillMeOption = false;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
@@ -62,6 +63,8 @@ namespace An_Rnd
         public static bool NoHightlights = false;
         //Need a way to keep track if properSave was used. (relevant in 'ResetRunVars')
         public static bool wasLoaded = false;
+        //max charge for current zone (void fields)
+        public static float maxCharge = 0f;
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -76,9 +79,54 @@ namespace An_Rnd
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
+            On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
+            On.RoR2.HoldoutZoneController.Update += ZoneCharge;
+            //On.RoR2.GenericObjectiveProvider.GenericObjectiveTracker;
+            //On.RoR2.HoldoutZoneController
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
+        }
+
+        public void ZoneCharge(On.RoR2.HoldoutZoneController.orig_Update orig, HoldoutZoneController self)
+        {
+            //Custom charge logic only applies in the void fields, otherwise the normal tp would be affected
+            if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
+            {
+                if (self.charge <= maxCharge) orig(self);
+                else if (self.charge < 0.99f) //if it works correctly this if branched should only be reached once per controller after which it disables itself
+                {
+                    orig(self);
+                    ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
+
+                    //set the charge for the next round to the current maxCharge + 1%
+                    controller.nullWards[controller.currentRound].GetComponent<HoldoutZoneController>().charge = maxCharge + 0.01f;
+                    //deactive the current Zone; or more like blanket disable all components of the current cell, it should do nothing anymore anyways
+                    GameObject CellVent = controller.nullWards[controller.currentRound - 1];
+                    CellVent.GetComponent<HoldoutZoneController>().enabled = false;
+                    //disables all children but the model of the cell vent; which includes most importantly the light beacon, which i could not find to remove otherwise
+                    for (int i = CellVent.transform.childCount - 1; i > 0; i--)
+                    {
+                        CellVent.transform.GetChild(i).gameObject.SetActive(false);
+                    }
+
+                    controller.EndRound();
+                }
+                else
+                {
+                    //this should be last cell; maybe not even but just to be sure
+                    orig(self);
+                }
+            }
+            
+        }
+
+        private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
+        {
+            maxCharge += 0.11f; //this zone should charge 11% more than the previous one
+            orig(self);
+            //should adjust the radius of the zone for charging this void cell
+            self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>().baseRadius *= voidRadius;
         }
 
         private bool Viewed(On.RoR2.UserProfile.orig_HasViewedViewable orig, UserProfile self, string viewableName)
@@ -317,6 +365,13 @@ namespace An_Rnd
                     10000f
                 ),
                 (
+                    Config.Bind("Void Fields", "Void Cell Radius", 1f, "Multiplies the base radius with the given number"),
+                    typeof(float),
+                    new Action<object>(value => voidRadius = (float)value),
+                    0f,
+                    10000f
+                ),
+                (
                     Config.Bind("Void Fields", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type.\nWill also add all Equipment at the same time\nVoid field rewards are now only lunar items(idk why). Items/Equipment may not show up in the listing but are still present\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON"),
                     typeof(bool),
                     new Action<object>(value => KillMeOption = (bool)value),
@@ -492,8 +547,9 @@ namespace An_Rnd
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
                 arenaCount += 1; //counter how often we entered the void fields
+                maxCharge = 0f; //we reset maxCharge so that each cell can add 11% to the total for 99[100]% at the end
                 ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
-
+                
                 //this should start the enemies with the items of the last attempts
                 if (latestInventoryItems != null)
                 {
@@ -505,6 +561,8 @@ namespace An_Rnd
                 //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
                 //VoidTele();
                 GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
+                //btw i do not sync portal to client, which i had to do for the null portal, but its supposed to be inaccesible anyway, so thats fine
+
                 for (int i = 0; i < arenaCount * numShrines; i++)
                 {
                     TeleporterInteraction.instance.AddShrineStack();
@@ -608,6 +666,9 @@ namespace An_Rnd
             if (extraStacksThreshold > 0) total += TeleporterInteraction.instance.shrineBonusStacks / extraMonsterTypesThreshold;
             for (int i = 0; i < total; i++)
             {
+                //every Monster gets its own director from this array so every called instance over 1, needs to clone a directory
+                //CombatDirector[] directors = self.combatDirectors;
+                //self.currentRound <- this should decide which to clone if they are indeed different, if they are the same then just make it longer
                 orig(self);
             }
         }
@@ -624,10 +685,10 @@ namespace An_Rnd
             yield return new WaitForSeconds(1f);
 
             // check all gamebojects because this way was easiest, probably improvable
-            GameObject[] portals = FindObjectsOfType<GameObject>();
+            GameObject[] obj = FindObjectsOfType<GameObject>();
             bool found = false;
 
-            foreach (GameObject portal in portals)
+            foreach (GameObject portal in obj)
             {
                 if (portal.name.Contains("PortalArena")) // Check if this is a Null portal; no idea why its called PortalArena
                 {
