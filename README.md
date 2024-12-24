@@ -26,5 +26,4 @@ Does Random stuff I wanted to have in the game:
 bugs/untested:
 - artifact of evolution
 - what happens with other orbs (like the void field rewards, there is currently no check were you are so if you get them somehwere else it should also give multiplied rewards)
-- adding more than 5 monster types breaks. (it seems like there are only 5 directors and every new monster should get its own one)
 - loading sometimes errors (and i cannot find out why) [might be when the saved inventory is empty?]

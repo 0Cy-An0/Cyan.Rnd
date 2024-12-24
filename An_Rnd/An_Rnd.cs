@@ -70,7 +70,7 @@ namespace An_Rnd
         //charge duration multiplier (void fields)
         public static float chargeDurationMult = 0f;
         //current cell Counter for the void fields; used for 'maxCharges'
-        public static int currentCell = 0;
+        public static int currentCell = -1;
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -88,7 +88,6 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
             //On.RoR2.GenericObjectiveProvider.GenericObjectiveTracker;
-            //On.RoR2.HoldoutZoneController
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
@@ -632,7 +631,6 @@ namespace An_Rnd
                 else if (self.charge < 0.99f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
                 {
                     orig(self);
-                    ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
                     self.FullyChargeHoldoutZone();
                 }
                 else
@@ -674,7 +672,7 @@ namespace An_Rnd
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
                 arenaCount += 1; //counter how often we entered the void fields
-                currentCell = 0; //reset current Cell counter; example use in 'ActivateCell' and 'ZoneCharge'
+                currentCell = -1; //reset current Cell counter; example use in 'ActivateCell' and 'ZoneCharge' [-1 because it does +1 always and 0-index]
                 ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
                 
                 //this should start the enemies with the items of the last attempts
@@ -802,44 +800,89 @@ namespace An_Rnd
             //increase MonsterTypes by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
             int total = extraMonsterTypes;//'extra' MonsterTypes is at least 1
             if (extraStacksThreshold > 0) total += TeleporterInteraction.instance.shrineBonusStacks / extraMonsterTypesThreshold;
+
+            //Extra Combat directors are needed because the fields (not sure how its on a normal stage) use 1 director per type
+            CombatDirector[] directors = self.combatDirectors;
+
+            int originalMaxIndex = directors.Length; //technically length is +1 because its 0-indexed but you know
+            int directorsNeeded = (total - 1); //how many new directors are needed; 1 call is coverd by the base game so we increase for all the extra ones
+            int newSize = directors.Length + directorsNeeded;
+
+            Array.Resize(ref self.combatDirectors, newSize);
+
+            // Add new CombatDirectors if necessary
+            for (int i = originalMaxIndex; i < newSize; i++)
+            {
+                self.combatDirectors[i] = NewCombatDirector(self.combatDirectors[originalMaxIndex - 1]); // Use the first director as reference
+            }
+            
+            //repeate original AddMonsterType()
             for (int i = 0; i < total; i++)
             {
-                //every Monster gets its own director from this array so every called instance over 1, needs to clone a directory
-                CombatDirector[] directors = self.combatDirectors;
-                CompareDirectors(directors);
-                //self.currentRound <- this should decide which to clone if they are indeed different, if they are the same then just make it longer
+                //Log.Info("AddMonsterType() called");
                 orig(self);
             }
         }
 
-        public static void CompareDirectors(CombatDirector[] directors)
+        // I found this out based on the prefab from ArenaMissionController but i believe it should work like this. CombatDirector does cause an error for something in 'Awake' but i do not know what and it seems to work anyway; can't find a fix sorry
+        public static CombatDirector NewCombatDirector(CombatDirector referenceDirector)
         {
-            for (int i = 0; i < directors.Length - 1; i++)
-            {
-                var currentDirector = directors[i];
-                var nextDirector = directors[i + 1];
+            
+            GameObject newCombatDirectorObject = new GameObject("ArenaMissionController");
 
-                Debug.Log($"Comparing directors at index {i} and {i + 1}:");
+            // Add the CombatDirector component to the new GameObject.
+            CombatDirector newCombatDirector = newCombatDirectorObject.AddComponent<CombatDirector>();
+            Log.Error("The Above Error Conercing RoR2.CombatDirector.Awake () is sadly expected; I am unsure what to do to remove it but it seems works anyway; If you find something that does not, please notify me");
 
-                if (currentDirector.customName != nextDirector.customName)
-                    Debug.Log($"- customName: {currentDirector.customName} vs {nextDirector.customName}");
+            //copy from the reference
+            newCombatDirector.monsterCredit = referenceDirector.monsterCredit;
+            newCombatDirector.refundedMonsterCredit = referenceDirector.refundedMonsterCredit;
+            newCombatDirector.expRewardCoefficient = referenceDirector.expRewardCoefficient;
+            newCombatDirector.goldRewardCoefficient = referenceDirector.goldRewardCoefficient;
+            newCombatDirector.minSeriesSpawnInterval = referenceDirector.minSeriesSpawnInterval;
+            newCombatDirector.maxSeriesSpawnInterval = referenceDirector.maxSeriesSpawnInterval;
+            newCombatDirector.minRerollSpawnInterval = referenceDirector.minRerollSpawnInterval;
+            newCombatDirector.maxRerollSpawnInterval = referenceDirector.maxRerollSpawnInterval;
+            newCombatDirector.moneyWaveIntervals = referenceDirector.moneyWaveIntervals;
+            newCombatDirector.teamIndex = referenceDirector.teamIndex;
+            newCombatDirector.creditMultiplier = referenceDirector.creditMultiplier;
+            newCombatDirector.spawnDistanceMultiplier = referenceDirector.spawnDistanceMultiplier;
+            newCombatDirector.maxSpawnDistance = referenceDirector.maxSpawnDistance;
+            newCombatDirector.minSpawnRange = referenceDirector.minSpawnRange;
+            newCombatDirector.shouldSpawnOneWave = referenceDirector.shouldSpawnOneWave;
+            newCombatDirector.targetPlayers = referenceDirector.targetPlayers;
+            newCombatDirector.skipSpawnIfTooCheap = referenceDirector.skipSpawnIfTooCheap;
+            newCombatDirector.maxConsecutiveCheapSkips = referenceDirector.maxConsecutiveCheapSkips;
+            newCombatDirector.resetMonsterCardIfFailed = referenceDirector.resetMonsterCardIfFailed;
+            newCombatDirector.maximumNumberToSpawnBeforeSkipping = referenceDirector.maximumNumberToSpawnBeforeSkipping;
+            newCombatDirector.eliteBias = referenceDirector.eliteBias;
+            newCombatDirector.combatSquad = referenceDirector.combatSquad;
+            newCombatDirector.ignoreTeamSizeLimit = referenceDirector.ignoreTeamSizeLimit;
+            newCombatDirector._monsterCards = referenceDirector._monsterCards;
+            newCombatDirector.fallBackToStageMonsterCards = referenceDirector.fallBackToStageMonsterCards;
+            newCombatDirector.hasStartedWave = referenceDirector.hasStartedWave;
+            newCombatDirector.rng = referenceDirector.rng;
+            newCombatDirector.currentMonsterCard = referenceDirector.currentMonsterCard;
+            newCombatDirector.currentActiveEliteTier = referenceDirector.currentActiveEliteTier;
+            newCombatDirector.currentActiveEliteDef = referenceDirector.currentActiveEliteDef;
+            newCombatDirector.currentMonsterCardCost = referenceDirector.currentMonsterCardCost;
+            newCombatDirector.monsterCardsSelection = referenceDirector.monsterCardsSelection;
+            newCombatDirector.consecutiveCheapSkips = referenceDirector.consecutiveCheapSkips;
+            newCombatDirector.playerRetargetTimer = referenceDirector.playerRetargetTimer;
+            newCombatDirector.spawnCountInCurrentWave = referenceDirector.spawnCountInCurrentWave;
+            newCombatDirector.moneyWaves = referenceDirector.moneyWaves;
+            newCombatDirector.isHalcyonShrineSpawn = referenceDirector.isHalcyonShrineSpawn;
+            newCombatDirector.shrineHalcyoniteDifficultyLevel = referenceDirector.shrineHalcyoniteDifficultyLevel;
+            newCombatDirector.enabled = referenceDirector.enabled;
+            newCombatDirector.useGUILayout = referenceDirector.useGUILayout;
+            newCombatDirector.monsterSpawnTimer = referenceDirector.monsterSpawnTimer;
+            newCombatDirector.lastAttemptedMonsterCard = referenceDirector.lastAttemptedMonsterCard;
+            newCombatDirector.totalCreditsSpent = referenceDirector.totalCreditsSpent;
+            newCombatDirector.onSpawnedServer = referenceDirector.onSpawnedServer;
+            newCombatDirector.spawnEffectPrefab = referenceDirector.spawnEffectPrefab;
+            newCombatDirector.currentSpawnTarget = referenceDirector.currentSpawnTarget;
 
-                if (currentDirector.monsterCredit != nextDirector.monsterCredit)
-                    Debug.Log($"- monsterCredit: {currentDirector.monsterCredit} vs {nextDirector.monsterCredit}");
-
-                if (currentDirector.refundedMonsterCredit != nextDirector.refundedMonsterCredit)
-                    Debug.Log($"- refundedMonsterCredit: {currentDirector.refundedMonsterCredit} vs {nextDirector.refundedMonsterCredit}");
-
-                if (currentDirector.expRewardCoefficient != nextDirector.expRewardCoefficient)
-                    Debug.Log($"- expRewardCoefficient: {currentDirector.expRewardCoefficient} vs {nextDirector.expRewardCoefficient}");
-
-                if (currentDirector.goldRewardCoefficient != nextDirector.goldRewardCoefficient)
-                    Debug.Log($"- goldRewardCoefficient: {currentDirector.goldRewardCoefficient} vs {nextDirector.goldRewardCoefficient}");
-
-                // Add more field comparisons as needed
-
-                Debug.Log("End of differences.\n");
-            }
+            return newCombatDirector;
         }
 
         private void CheckNullPortal(On.RoR2.BazaarController.orig_OnStartServer orig, BazaarController self)
