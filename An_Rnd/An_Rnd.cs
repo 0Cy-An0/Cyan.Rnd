@@ -77,6 +77,8 @@ namespace An_Rnd
         public static int currentCell = -1;
         //only used if useShrine is false; substitutes/is substituted by mountain shrines
         public static int DifficultyCounter = 0;
+        //should be what exactly what the name says. Check method 'RemoveMatchingMonsterCards' for specific use
+        public static String monsterBlacklist = "";
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -317,6 +319,11 @@ namespace An_Rnd
                     ConfigEntry<bool> castConfig = (ConfigEntry<bool>)config;
                     castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
                 }
+                else if (StaticType == typeof(String))
+                {
+                    ConfigEntry<String> castConfig = (ConfigEntry<String>)config;
+                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
+                }
                 else
                 {
                     Log.Error($"Could not get type {StaticType} to hook SettingChanged for {config.Definition.Key}");
@@ -386,6 +393,13 @@ namespace An_Rnd
                     new Action<object>(value => extraMonsterTypesThreshold = (int)value),
                     0,
                     10000
+                ),
+                (
+                    Config.Bind("Void Fields", "Monster Blacklist", "", "Any String written here in the form of '[Name],[Name],...' Will be matched to the potential enemy pool and removed if a match is found\nExample, RoR2 has the Spawn Card 'cscLesserWisp' so having this set to 'cscLesserWisp' will remove only the Wisp from the potential Enemies. Setting it to 'cscLesserWisp,cscGreaterWisp' will remove both lesser and greater Wisp, wereas 'Wisp' will remove any that have the name Wisp in them which might remove other modded entries like Ancient Wisp\nAt this point you just have to know or guess the names of the SpawnCards"),
+                    typeof(String),
+                    new Action<object>(value => monsterBlacklist = (String)value),
+                    null,
+                    null
                 ),
                 (
                     Config.Bind("Void Fields", "Extra Credits", 0, "How many extra credits are given to the void fields per active mountain shrine\n0 for disabled[i mean x+0=x...]"),
@@ -576,6 +590,11 @@ namespace An_Rnd
                     ConfigEntry<bool> castConfig = (ConfigEntry<bool>)config;
                     update(castConfig.Value);
                 }
+                else if (type == typeof(String))
+                {
+                    ConfigEntry<String> castConfig = (ConfigEntry<String>)config;
+                    update(castConfig.Value);
+                }
                 else
                 {
                     Log.Error($"{config.Definition.Key} is of invalid type: {type}");
@@ -633,6 +652,13 @@ namespace An_Rnd
                 {
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.CheckBoxOption, RiskOfOptions");
                     Log.Info($"Option {config.Definition.Key} as CheckBox");
+                    return Activator.CreateInstance(baseOptionType, config);
+                }
+                else if (varType == typeof(String))
+                {
+                    Type baseOptionType = Type.GetType("RiskOfOptions.Options.StringInputFieldOption, RiskOfOptions");
+
+                    Log.Info($"Option {config.Definition.Key} as StringInputField");
                     return Activator.CreateInstance(baseOptionType, config);
                 }
                 else
@@ -701,8 +727,11 @@ namespace An_Rnd
                 arenaCount += 1; //counter how often we entered the void fields
                 currentCell = -1; //reset current Cell counter; example use in 'ActivateCell' and 'ZoneCharge' [-1 because it does +1 always and 0-index]
                 DifficultyCounter = 0; //reset DifficultyCounter even tough it may not be used depening on choosen options
+
                 ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
-                
+                //remove cards from the pool the Controller chooses the monsters from
+                RemoveMatchingMonsterCards(controller); //Matching as in matching the filter given by the config option, which at this point i have not decieded on how to implement
+
                 //this should start the enemies with the items of the last attempts
                 if (latestInventoryItems != null)
                 {
@@ -895,7 +924,7 @@ namespace An_Rnd
             }
         }
 
-        // I found this out based on the prefab from ArenaMissionController but i believe it should work like this
+        // I found this out based on the prefab from ArenaMissionController but i believe it should work like this (this changed a few times at this point its mainly the name of the GameObject that's left, the other stuff is just from the reference)
         public static CombatDirector NewCombatDirector(CombatDirector referenceDirector)
         {
             
@@ -957,6 +986,49 @@ namespace An_Rnd
             return newCombatDirector;
         }
 
+        public void RemoveMatchingMonsterCards(ArenaMissionController controller)
+        {
+            List<int> toBeRemovedIndices = new List<int>();
+            String[] BlacklistUsables = { }; //empty array as default so that even if an error occurs it will just act as if there is no blacklist
+            try
+            {
+                BlacklistUsables = monsterBlacklist.Split(',');
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Unable to parse Monster Blacklist: {ex.Message}");
+            }
+
+            for (int i = 0; i < controller.availableMonsterCards.Count; i++)
+            {
+                var choiceInfo = controller.availableMonsterCards.GetChoice(i);
+                var directorCard = choiceInfo.value;
+
+                //Blacklist check if the current MonsterCard name is found to contain a BlackListedterm
+                bool isBlacklisted = false;
+                foreach (string blacklistItem in BlacklistUsables)
+                {
+                    if (directorCard.spawnCard.name.Contains(blacklistItem))
+                    {
+                        isBlacklisted = true;
+                        break;
+                    }
+                }
+
+                if (isBlacklisted)
+                {
+                    Log.Info($"Removed Monster {directorCard.spawnCard.name} due to Blacklist");
+                    toBeRemovedIndices.Add(i);
+                }
+            }
+
+            // Iterating in reverse order because removing an option also shifts everything above down by 1 (which should have been predictable and i still missed it)
+            foreach (int index in toBeRemovedIndices.OrderByDescending(i => i))
+            {
+                controller.availableMonsterCards.RemoveChoice(index);
+            }
+        }
+
         private void CheckNullPortal(On.RoR2.BazaarController.orig_OnStartServer orig, BazaarController self)
         {
             orig(self);
@@ -996,7 +1068,7 @@ namespace An_Rnd
             NetworkServer.Spawn(obj); //this should sync the object to all
         }
 
-        /*private void Update()
+        private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
             {
@@ -1015,6 +1087,6 @@ namespace An_Rnd
             // Instantiate the portal prefab at the specified position
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
-        }*/
+        }
     }
 }
