@@ -895,15 +895,15 @@ namespace An_Rnd
             }
         }
 
-        // I found this out based on the prefab from ArenaMissionController but i believe it should work like this. CombatDirector does cause an error for something in 'Awake' but i do not know what and it seems to work anyway; can't find a fix sorry
+        // I found this out based on the prefab from ArenaMissionController but i believe it should work like this
         public static CombatDirector NewCombatDirector(CombatDirector referenceDirector)
         {
             
             GameObject newCombatDirectorObject = new GameObject("ArenaMissionController");
 
             // Add the CombatDirector component to the new GameObject.
+            newCombatDirectorObject.SetActive(false); //directly adding causes an error the Ror2.CombatDirector.Awake() method so i have to disably it until i added all the reference variables (some of them may be overrriden or set differently actually but i do not know what awake does exactly, so i just copied everything i could)
             CombatDirector newCombatDirector = newCombatDirectorObject.AddComponent<CombatDirector>();
-            Log.Error("The Above Error Concerning RoR2.CombatDirector.Awake () is sadly expected; I am unsure what to do to remove it but it seems works anyway; If you find something that does not, please notify me");
 
             //copy from the reference
             newCombatDirector.monsterCredit = referenceDirector.monsterCredit;
@@ -953,6 +953,7 @@ namespace An_Rnd
             newCombatDirector.spawnEffectPrefab = referenceDirector.spawnEffectPrefab;
             newCombatDirector.currentSpawnTarget = referenceDirector.currentSpawnTarget;
 
+            newCombatDirectorObject.SetActive(true);//enable the object and cause Awake() to run only now
             return newCombatDirector;
         }
 
@@ -995,7 +996,7 @@ namespace An_Rnd
             NetworkServer.Spawn(obj); //this should sync the object to all
         }
 
-        /*private void Update()
+        private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
             {
@@ -1014,6 +1015,6 @@ namespace An_Rnd
             // Instantiate the portal prefab at the specified position
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
-        }*/
+        }
     }
 }
