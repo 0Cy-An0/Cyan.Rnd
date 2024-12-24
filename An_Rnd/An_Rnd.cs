@@ -289,7 +289,7 @@ namespace An_Rnd
                     10000
                 ),
                 (
-                    Config.Bind("Void Fields", "Monsters", 1, "Sets the number of Monsters the void fields add at once.\nCurrently Broken\nCurrently Broken"),
+                    Config.Bind("Void Fields", "Monsters", 1, "Sets the number of Monsters the void fields add at once.\nReminder that this will be capped by your enemies as in the further you are in stage/lvl you may get harder enemies which you will never get even if you try 100 times (=this set to 100) stage 1\nStill causes an error but seems to work anyway, error is logged, if you are curious, but feel safe to use this for now"),
                     typeof(int),
                     new Action<object>(value => extraMonsterTypes = (int)value),
                     1,
@@ -810,7 +810,7 @@ namespace An_Rnd
 
             Array.Resize(ref self.combatDirectors, newSize);
 
-            // Add new CombatDirectors if necessary
+            //Add new CombatDirectors to array; not all may be used but that is then only because the potential enemy pool is empty, which is impossible to know (i think)
             for (int i = originalMaxIndex; i < newSize; i++)
             {
                 self.combatDirectors[i] = NewCombatDirector(self.combatDirectors[originalMaxIndex - 1]); // Use the first director as reference
@@ -819,7 +819,6 @@ namespace An_Rnd
             //repeate original AddMonsterType()
             for (int i = 0; i < total; i++)
             {
-                //Log.Info("AddMonsterType() called");
                 orig(self);
             }
         }
@@ -832,7 +831,7 @@ namespace An_Rnd
 
             // Add the CombatDirector component to the new GameObject.
             CombatDirector newCombatDirector = newCombatDirectorObject.AddComponent<CombatDirector>();
-            Log.Error("The Above Error Conercing RoR2.CombatDirector.Awake () is sadly expected; I am unsure what to do to remove it but it seems works anyway; If you find something that does not, please notify me");
+            Log.Error("The Above Error Concerning RoR2.CombatDirector.Awake () is sadly expected; I am unsure what to do to remove it but it seems works anyway; If you find something that does not, please notify me");
 
             //copy from the reference
             newCombatDirector.monsterCredit = referenceDirector.monsterCredit;
