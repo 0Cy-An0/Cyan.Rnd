@@ -27,3 +27,4 @@ bugs/untested:
 - artifact of evolution
 - what happens with other orbs (like the void field rewards, there is currently no check were you are so if you get them somehwere else it should also give multiplied rewards)
 - loading sometimes errors (and i cannot find out why) [might be when the saved inventory is empty?]
+- empty blacklist causes everything to be removed
