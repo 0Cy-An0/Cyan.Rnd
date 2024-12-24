@@ -57,6 +57,8 @@ namespace An_Rnd
         public static float voidRadius = 1f;
         //Super Secret Option
         public static bool KillMeOption = false;
+        //multiply by 2 x times instead of just adding x? For the mountain shrines ('numShrines')
+        public static bool expScaling = false;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
         public static int[] latestInventoryItems;
         //Will remove all pre-game(logbook, select, etc.) Hightlights automatically if true
@@ -275,6 +277,13 @@ namespace An_Rnd
                     10000
                 ),
                 (
+                    Config.Bind("Void Fields", "exponential Scaling", false, "If enabled, will use the above number to *2 instead of just adding\nfor example 4 for shrines would add 1 if 0 are active and then do *2,*2,*2 for a total of 8"),
+                    typeof(bool),
+                    new Action<object>(value => expScaling = (bool)value),
+                    null,
+                    null
+                ),
+                (
                     Config.Bind("Void Fields", "Enemy ItemStacks", 1, "Sets the number of itemStacks the void fields enemies can obtain.\n1 per activation is vanilla, but with this you can get for example goat's hoof and crit classes at the same time\ndisabled if Kill Me is checked"),
                     typeof(int),
                     new Action<object>(value => extraStacks = (int)value),
@@ -307,7 +316,7 @@ namespace An_Rnd
                     typeof(int),
                     new Action<object>(value => extraMonsterCredits = (int)value),
                     0,
-                    100000
+                    10000
                 ),
                 (
                     Config.Bind("Void Fields", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine.\n0 for disable"),
@@ -686,9 +695,20 @@ namespace An_Rnd
                 //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
                 //VoidTele();
                 GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
-                //btw i do not sync portal to client, which i had to do for the null portal, but its supposed to be inaccesible anyway, so thats fine
+                //btw i do not sync portal to client, which i had to do for the null portal, but its supposed to be inaccesible anyway, so that should be fine
 
-                for (int i = 0; i < arenaCount * numShrines; i++)
+                int total = numShrines;
+                if (expScaling && total > 0) //i think it would add 1 shrine anyway if i do not check that its disabled here
+                {
+                    if (TeleporterInteraction.instance.shrineBonusStacks == 0)
+                    {
+                        TeleporterInteraction.instance.AddShrineStack();
+                        total -= 1;
+                    }
+                    total = (int) (TeleporterInteraction.instance.shrineBonusStacks * Math.Pow(2.0, (double)total));
+                }
+
+                for (int i = 0; i < arenaCount * total; i++)
                 {
                     TeleporterInteraction.instance.AddShrineStack();
                 }
