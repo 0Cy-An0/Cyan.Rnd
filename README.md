@@ -20,7 +20,7 @@ Does Random stuff I wanted to have in the game:
 Currently just ideas:
 
 - void field stuff
-- might add a option to get all three items via round robin
+    - might add a option to get all three items via round robin
 
 bugs/untested:
 - artifact of evolution

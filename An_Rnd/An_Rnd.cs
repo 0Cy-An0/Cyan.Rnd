@@ -259,13 +259,78 @@ namespace An_Rnd
             }
         }
 
-        //also adds the config first (thought i should note that, as its not quite in the name); remind me to make this a different method for readability probably a good idea for some time later
         private void TryInitRiskOfOptions()
         {
-            // Define the List to store ConfigEntry, Typing, the corresponding update action for the static variable and min/max for the slider/field
-            //ConfigEntry is Configurations for option with Category, Name, Default, and Description
-            var configEntries = new List<(ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar, object min, object max)>
+            var configEntries = CreateLoadConfig();
+
+            try
             {
+                // Check if RiskOfOptions is available
+                Type modSettingsManagerType = Type.GetType("RiskOfOptions.ModSettingsManager, RiskOfOptions");
+                if (modSettingsManagerType != null)
+                {
+                    // Dynamically create configurations and options
+                    foreach (var (config, varType, _, min, max) in configEntries)
+                    {
+                        object option = CreateOption(config, varType, min, max); //vodoo method to create the option like RiskOfOptions expects it, with it's typing; i say vodoo because i do not feel very confidend in this and got a bit of a short 1hour lesson from ChatGpt that did not help me at all
+                        if (option != null)
+                        {
+                            MethodInfo addOptionMethod = modSettingsManagerType.GetMethod(
+                                "AddOption",
+                                BindingFlags.Public | BindingFlags.Static,
+                                null,
+                                new[] { option.GetType().BaseType },
+                                null
+                            );
+                            addOptionMethod?.Invoke(null, new[] { option }); //Invokes as in this calls the method of RiskOfOptions that then lists my option and stuff
+                        }
+                    }
+
+                    Log.Info("RiskOfOptions integration successful.");
+                }
+                else
+                {
+                    Log.Warning("RiskOfOptions is not available. Falling back to default behavior.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to integrate RiskOfOptions: {ex.Message}");
+            }
+
+            // Hook setting changes dynamically
+            foreach (var (config, StaticType, updateStaticVar, _, _) in configEntries)
+            {
+                // Cast to the specific type of ConfigEntry<T> dynamically
+                if (StaticType == typeof(int))
+                {
+                    ConfigEntry<int> castConfig = (ConfigEntry<int>)config;
+                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
+                }
+                else if (StaticType == typeof(float))
+                {
+                    ConfigEntry<float> castConfig = (ConfigEntry<float>)config;
+                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
+                }
+                else if (StaticType == typeof(bool))
+                {
+                    ConfigEntry<bool> castConfig = (ConfigEntry<bool>)config;
+                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
+                }
+                else
+                {
+                    Log.Error($"Could not get type {StaticType} to hook SettingChanged for {config.Definition.Key}");
+                }
+            }
+        }
+
+        //this does what it says creates the config and loads values that may already be there and different from the default ones; returns all options in an array [should only be called once]
+        private (ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar, object min, object max)[] CreateLoadConfig()
+        {
+            // Define the Attray to store ConfigEntry, Typing, the corresponding update action for the static variable and min/max for the slider/field
+            //ConfigEntryBase is Configurations for option with Category, Name, Default, and Description
+            (ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar, object min, object max)[] configEntries = 
+            [
                 (
                     Config.Bind("General", "No Hightlights", false, "If enabled, anytime the game asks if you have viewed a 'viewable' it will skip the check and return true.\nThis should effect things like logbook entries and new characters/abilities in the select screen"),
                     typeof(bool),
@@ -357,7 +422,7 @@ namespace An_Rnd
                     0.0001f,
                     1000f
                 ),
-                ( //i wanted to add these via a loop but that caused some wierd error with RiskOfOptions...
+                ( //i wanted to add these via a loop but that caused some wierd error with RiskOfOptions... [I replaced this with an array at a later point, because of such things it seemed more fitting]
                     Config.Bind("Void Fields", "Void Cell 1 start Charge", 0f, "The void cell starts at the given percentage for Cell 1"),
                     typeof(float),
                     new Action<object>(value => startCharges[0] = (float)value),
@@ -491,7 +556,7 @@ namespace An_Rnd
                     null
                 )
 
-            };
+            ];
 
             //change from default values if config is already present:
             foreach (var (config, type, update, _, _) in configEntries)
@@ -517,65 +582,7 @@ namespace An_Rnd
                 }
             }
 
-            try
-            {
-                // Check if RiskOfOptions is available
-                Type modSettingsManagerType = Type.GetType("RiskOfOptions.ModSettingsManager, RiskOfOptions");
-                if (modSettingsManagerType != null)
-                {
-                    // Dynamically create configurations and options
-                    foreach (var (config, varType, _, min, max) in configEntries)
-                    {
-                        object option = CreateOption(config, varType, min, max); //vodoo method to create the option like RiskOfOptions expects it, with it's typing; i say vodoo because i do not feel very confidend in this and got a bit of a short 1hour lesson from ChatGpt that did not help me at all
-                        if (option != null)
-                        {
-                            MethodInfo addOptionMethod = modSettingsManagerType.GetMethod(
-                                "AddOption",
-                                BindingFlags.Public | BindingFlags.Static,
-                                null,
-                                new[] { option.GetType().BaseType },
-                                null
-                            );
-                            addOptionMethod?.Invoke(null, new[] { option }); //Invokes as in this calls the method of RiskOfOptions that then lists my option and stuff
-                        }
-                    }
-
-                    Log.Info("RiskOfOptions integration successful.");
-                }
-                else
-                {
-                    Log.Warning("RiskOfOptions is not available. Falling back to default behavior.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Failed to integrate RiskOfOptions: {ex.Message}");
-            }
-
-            // Hook setting changes dynamically
-            foreach (var (config, StaticType, updateStaticVar, _, _) in configEntries)
-            {
-                // Cast to the specific type of ConfigEntry<T> dynamically
-                if (StaticType == typeof(int))
-                {
-                    ConfigEntry<int> castConfig = (ConfigEntry<int>)config;
-                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
-                }
-                else if (StaticType == typeof(float))
-                {
-                    ConfigEntry<float> castConfig = (ConfigEntry<float>)config;
-                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
-                }
-                else if (StaticType == typeof(bool))
-                {
-                    ConfigEntry<bool> castConfig = (ConfigEntry<bool>)config;
-                    castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
-                }
-                else
-                {
-                    Log.Error($"Could not get type {StaticType} to hook SettingChanged for {config.Definition.Key}");
-                }
-            }
+            return configEntries;
         }
 
         private object CreateOption(ConfigEntryBase config, Type varType, object min, object max)
