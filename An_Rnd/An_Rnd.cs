@@ -59,6 +59,8 @@ namespace An_Rnd
         public static bool KillMeOption = false;
         //multiply by 2 x times instead of just adding x? For the mountain shrines ('numShrines')
         public static bool expScaling = false;
+        //for teleporter spawn/counters with mountain shrines
+        public static bool useShrine = false;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
         public static int[] latestInventoryItems;
         //Will remove all pre-game(logbook, select, etc.) Hightlights automatically if true
@@ -73,6 +75,8 @@ namespace An_Rnd
         public static float chargeDurationMult = 0f;
         //current cell Counter for the void fields; used for 'maxCharges'
         public static int currentCell = -1;
+        //only used if useShrine is false; substitutes/is substituted by mountain shrines
+        public static int DifficultyCounter = 0;
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -266,6 +270,13 @@ namespace An_Rnd
                     Config.Bind("General", "No Hightlights", false, "If enabled, anytime the game asks if you have viewed a 'viewable' it will skip the check and return true.\nThis should effect things like logbook entries and new characters/abilities in the select screen"),
                     typeof(bool),
                     new Action<object>(value => NoHightlights = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("Void Fields", "Use Shrines", false, "If enabled, will spawn a unusable teleporter in the void fields to activate mountainShrines instead of just an internal counter\nThis Option will probably do nothing if you do not have other mods that interact with mountain shrines, i reccomend looking for one that makes them persist over the whole run after activiating"),
+                    typeof(bool),
+                    new Action<object>(value => useShrine = (bool)value),
                     null,
                     null
                 ),
@@ -682,6 +693,7 @@ namespace An_Rnd
             {
                 arenaCount += 1; //counter how often we entered the void fields
                 currentCell = -1; //reset current Cell counter; example use in 'ActivateCell' and 'ZoneCharge' [-1 because it does +1 always and 0-index]
+                DifficultyCounter = 0; //reset DifficultyCounter even tough it may not be used depening on choosen options
                 ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
                 
                 //this should start the enemies with the items of the last attempts
@@ -692,28 +704,46 @@ namespace An_Rnd
                     controller.inventory.AddItemsFrom(latestInventoryItems, includeAllFilter);
                 }
 
-                //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
-                //VoidTele();
-                GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
-                //btw i do not sync portal to client, which i had to do for the null portal, but its supposed to be inaccesible anyway, so that should be fine
-
-                int total = numShrines;
-                if (expScaling && total > 0) //i think it would add 1 shrine anyway if i do not check that its disabled here
+                if (useShrine)
                 {
-                    if (TeleporterInteraction.instance.shrineBonusStacks == 0)
+                    //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
+                    GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
+                    //btw i do not sync portal to client, which i had to do for the null portal, but its supposed to be inaccesible anyway, so that should be fine
+
+                    int total = numShrines;
+                    if (expScaling && total > 0) //i think it would add 1 shrine anyway if i do not check that its disabled here
                     {
-                        TeleporterInteraction.instance.AddShrineStack();
-                        total -= 1;
+                        if (TeleporterInteraction.instance.shrineBonusStacks == 0)
+                        {
+                            TeleporterInteraction.instance.AddShrineStack();
+                            total -= 1;
+                        }
+                        total = (int) (TeleporterInteraction.instance.shrineBonusStacks * Math.Pow(2.0, (double)total));
                     }
-                    total = (int) (TeleporterInteraction.instance.shrineBonusStacks * Math.Pow(2.0, (double)total));
+
+                    for (int i = 0; i < arenaCount * total; i++)
+                    {
+                        TeleporterInteraction.instance.AddShrineStack(); //So i am not 100% sure what else happens other than shrineBonusStacks += 1, but there are hooks and such, so i used a loop here
+                    }
+                    //adding the extra Credits from the config
+                    controller.baseMonsterCredit += extraMonsterCredits * TeleporterInteraction.instance.shrineBonusStacks;
+                }
+                else //we do not need a portal now, and the shrines are replaces by DifficultyCounter
+                {
+                    DifficultyCounter += numShrines;
+
+                    if (expScaling && numShrines > 0)
+                    {
+                        DifficultyCounter += (int) (arenaCount * DifficultyCounter * Math.Pow(2.0, (double)numShrines));
+                    }
+                    else
+                    {
+                        DifficultyCounter += arenaCount * numShrines;
+                    }
+
+                    controller.baseMonsterCredit += extraMonsterCredits * DifficultyCounter;
                 }
 
-                for (int i = 0; i < arenaCount * total; i++)
-                {
-                    TeleporterInteraction.instance.AddShrineStack();
-                }
-                //adding the extra Credits from the config
-                controller.baseMonsterCredit += extraMonsterCredits * TeleporterInteraction.instance.shrineBonusStacks;
             }
             return orig(self);
         }
@@ -733,7 +763,10 @@ namespace An_Rnd
 
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
-            int total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
+            int total;
+            if (useShrine) total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
+            else total = Math.Max((int)Math.Floor(DifficultyCounter * extraRewards), 1);
+
             for (int i = 0; i < total; i++)
             {
                 orig(self, pickupIndex);
@@ -742,8 +775,9 @@ namespace An_Rnd
 
         private IEnumerator ChunkRewards(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
-            int totalItems = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
-
+            int totalItems;
+            if (useShrine) totalItems = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
+            else totalItems = Math.Max((int)Math.Floor(DifficultyCounter * extraRewards), 1);
             //if mountain shrines are 0, it should still give 1 item (first run)
             for (int i = 0; i < totalItems; i++)
             {
@@ -774,7 +808,11 @@ namespace An_Rnd
 
             //increase extraStacks by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
             int totalStacks = extraStacks;
-            if (extraStacksThreshold > 0) totalStacks += TeleporterInteraction.instance.shrineBonusStacks / extraStacksThreshold;
+            if (extraStacksThreshold > 0)
+            {
+                if (useShrine) totalStacks += TeleporterInteraction.instance.shrineBonusStacks / extraStacksThreshold;
+                else totalStacks += DifficultyCounter / extraStacksThreshold;
+            }
 
             // Call the original method to add the items
             for (int i = 0; i < totalStacks; i++) //extraStacks can be min set to 1. Extra callings of orig, rolls for a new itemStacks and adds it to the ItemPool
@@ -794,7 +832,9 @@ namespace An_Rnd
                     if (extraItems > 0)
                     {
                         // Calculate the shrine bonus stacking, rounded down; This will only work for max ~2 Billion items, but if you manage that ingame it probably does not matter. besides Ror2 stores the items in an intArray which will have the same problem
-                        int bonus = (int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems);
+                        int bonus;
+                        if (useShrine) bonus = (int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems);
+                        else bonus = (int)Math.Floor(DifficultyCounter * extraItems);
 
                         // Ensure the enmies get at least 1 item
                         bonus = Math.Max(bonus, 1);
@@ -808,7 +848,8 @@ namespace An_Rnd
                 }
                 else
                 {
-                    inv.itemStacks[i] += Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
+                    if (useShrine) inv.itemStacks[i] += Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
+                    else inv.itemStacks[i] += Math.Max((int)Math.Floor(DifficultyCounter * extraItems), 1);
                 }
 
                 latestInventoryItems[i] = inv.itemStacks[i];
@@ -819,7 +860,11 @@ namespace An_Rnd
         {
             //increase MonsterTypes by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
             int total = extraMonsterTypes;//'extra' MonsterTypes is at least 1
-            if (extraStacksThreshold > 0) total += TeleporterInteraction.instance.shrineBonusStacks / extraMonsterTypesThreshold;
+            if (extraStacksThreshold > 0)
+            {
+                if (useShrine) total += TeleporterInteraction.instance.shrineBonusStacks / extraMonsterTypesThreshold;
+                else total += DifficultyCounter / extraMonsterTypesThreshold;
+            }
 
             //Extra Combat directors are needed because the fields (not sure how its on a normal stage) use 1 director per type
             CombatDirector[] directors = self.combatDirectors;
