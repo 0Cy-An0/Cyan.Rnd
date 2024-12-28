@@ -678,7 +678,7 @@ namespace An_Rnd
         public void ZoneCharge(On.RoR2.HoldoutZoneController.orig_Update orig, HoldoutZoneController self)
         {
             //non-host check
-            if (NetworkServer.active)
+            if (!self)
             {
                 orig(self);
                 return;
@@ -728,12 +728,6 @@ namespace An_Rnd
 
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
-            //non-host check
-            if (NetworkServer.active)
-            {
-                return orig(self);
-            }
-
             //there is 'self.sceneDef.baseSceneName' but its seems to not be an instance for some reason, so i found this: 'SceneInfo.instance.sceneDef.baseSceneName'
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
@@ -742,6 +736,11 @@ namespace An_Rnd
                 DifficultyCounter = 0; //reset DifficultyCounter even tough it may not be used depening on choosen options
 
                 ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
+                //non-host check
+                if (!controller)
+                {
+                    return orig(self);
+                }
                 //remove cards from the pool the Controller chooses the monsters from
                 RemoveMatchingMonsterCards(controller); //Matching as in matching the filter given by the config option, which at this point i have not decieded on how to implement
 
@@ -813,7 +812,7 @@ namespace An_Rnd
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
             //non-host check
-            if (NetworkServer.active)
+            if (!TeleporterInteraction.instance)
             {
                 orig(self, pickupIndex);
                 return;
@@ -846,14 +845,13 @@ namespace An_Rnd
 
         private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
         {
-            //non-host check
-            if (NetworkServer.active)
-            {
-                orig(self);
-                return;
-            }
             orig(self);
             currentCell += 1; //increase counter cuse thing happened
+            //non-host check
+            if (!self.nullWards[self.currentRound - 1])
+            {
+                return;
+            }
             //should adjust based on all the settings
             HoldoutZoneController cell = self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>();
             cell.baseRadius *= voidRadius;
@@ -864,7 +862,7 @@ namespace An_Rnd
         private void MultiplyEnemyItem(On.RoR2.ArenaMissionController.orig_AddItemStack orig, ArenaMissionController self)
         {
             //non-host check
-            if (NetworkServer.active)
+            if (!self.inventory)
             {
                 orig(self);
                 return;
@@ -927,7 +925,7 @@ namespace An_Rnd
         private void MultiplyEnemyType(On.RoR2.ArenaMissionController.orig_AddMonsterType orig, ArenaMissionController self)
         {
             //non-host check
-            if (NetworkServer.active)
+            if (!TeleporterInteraction.instance)
             {
                 orig(self);
                 return;
@@ -1071,7 +1069,7 @@ namespace An_Rnd
         private void CheckNullPortal(On.RoR2.BazaarController.orig_OnStartServer orig, BazaarController self)
         {
             //non-host check
-            if (NetworkServer.active)
+            if (!Run.instance)
             {
                 orig(self);
                 return;
