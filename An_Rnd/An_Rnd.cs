@@ -677,6 +677,13 @@ namespace An_Rnd
         //below this comment are hooks and stuff, above should only be awake/Init type stuff. (very good explain: me)
         public void ZoneCharge(On.RoR2.HoldoutZoneController.orig_Update orig, HoldoutZoneController self)
         {
+            //non-host check
+            if (NetworkServer.active)
+            {
+                orig(self);
+                return;
+            }
+
             //Custom charge logic only applies in the void fields, otherwise the normal tp would be affected
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
@@ -721,6 +728,12 @@ namespace An_Rnd
 
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
+            //non-host check
+            if (NetworkServer.active)
+            {
+                return orig(self);
+            }
+
             //there is 'self.sceneDef.baseSceneName' but its seems to not be an instance for some reason, so i found this: 'SceneInfo.instance.sceneDef.baseSceneName'
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
@@ -799,6 +812,13 @@ namespace An_Rnd
 
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
+            //non-host check
+            if (NetworkServer.active)
+            {
+                orig(self, pickupIndex);
+                return;
+            }
+
             int total;
             if (useShrine) total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
             else total = Math.Max((int)Math.Floor(DifficultyCounter * extraRewards), 1);
@@ -826,6 +846,12 @@ namespace An_Rnd
 
         private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
         {
+            //non-host check
+            if (NetworkServer.active)
+            {
+                orig(self);
+                return;
+            }
             orig(self);
             currentCell += 1; //increase counter cuse thing happened
             //should adjust based on all the settings
@@ -837,6 +863,12 @@ namespace An_Rnd
 
         private void MultiplyEnemyItem(On.RoR2.ArenaMissionController.orig_AddItemStack orig, ArenaMissionController self)
         {
+            //non-host check
+            if (NetworkServer.active)
+            {
+                orig(self);
+                return;
+            }
             Inventory inv = self.inventory;
 
             // Track how many items are being added by checking the previous state (before adding new items)
@@ -894,6 +926,13 @@ namespace An_Rnd
 
         private void MultiplyEnemyType(On.RoR2.ArenaMissionController.orig_AddMonsterType orig, ArenaMissionController self)
         {
+            //non-host check
+            if (NetworkServer.active)
+            {
+                orig(self);
+                return;
+            }
+
             //increase MonsterTypes by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
             int total = extraMonsterTypes;//'extra' MonsterTypes is at least 1
             if (extraStacksThreshold > 0)
@@ -1031,6 +1070,13 @@ namespace An_Rnd
 
         private void CheckNullPortal(On.RoR2.BazaarController.orig_OnStartServer orig, BazaarController self)
         {
+            //non-host check
+            if (NetworkServer.active)
+            {
+                orig(self);
+                return;
+            }
+
             orig(self);
             self.StartCoroutine(CheckNullDelay());
 

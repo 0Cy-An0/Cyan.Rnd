@@ -20,7 +20,7 @@ Does Random stuff I wanted to have in the game:
 Currently just ideas:
 
 - void field stuff
-    - add/remov monsters from spawn (card?) pool
+    - add monsters from spawn (card?) pool
     - might add a option to get all three items via round robin
 
 bugs/untested:
