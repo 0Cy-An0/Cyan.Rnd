@@ -35,6 +35,7 @@ namespace An_Rnd
 
         public static int arenaCount = -1; //this will count how many times the void fields were entered; just using the name convention of base RoR2 for the stage
         //starts at -1 so that first entry is 0
+  
         //Will make this a riskofOptionsOption, probably, in the future; If this even does anything by then, which it does not currenlty, while i am adding Options
         public static int chunkSize = 50;
         //how many shrines shall activate per entry of the fields; first entry is always base game 0
@@ -55,6 +56,8 @@ namespace An_Rnd
         public static float extraRewards = 0f;
         //will be multiplied to the base radius of the void cells
         public static float voidRadius = 1f;
+        //skip unmodifed void fields boolean
+        public static bool skipVanilla = false;
         //Super Secret Option
         public static bool KillMeOption = false;
         //multiply by 2 x times instead of just adding x? For the mountain shrines ('numShrines')
@@ -360,7 +363,14 @@ namespace An_Rnd
                     10000
                 ),
                 (
-                    Config.Bind("Void Fields", "exponential Scaling", false, "If enabled, will use the above number to *2 instead of just adding\nfor example 4 for shrines would add 1 if 0 are active and then do *2,*2,*2 for a total of 8"),
+                    Config.Bind("Void Fields", "Skip unmodified fields", false, "If enabled, skips the first normal void fields and will directly apply the difficulty modifier"),
+                    typeof(bool),
+                    new Action<object>(value => skipVanilla = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("Void Fields", "exponential Scaling", false, "If enabled, will use the above Number of Shrines to *2 instead of just adding\nfor example 4 for shrines would add 1 if 0 are active and then do *2,*2,*2 for a total of 8"),
                     typeof(bool),
                     new Action<object>(value => expScaling = (bool)value),
                     null,
@@ -731,6 +741,7 @@ namespace An_Rnd
             //there is 'self.sceneDef.baseSceneName' but its seems to not be an instance for some reason, so i found this: 'SceneInfo.instance.sceneDef.baseSceneName'
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
+                if (skipVanilla && arenaCount < 0) arenaCount = 0;
                 arenaCount += 1; //counter how often we entered the void fields
                 currentCell = -1; //reset current Cell counter; example use in 'ActivateCell' and 'ZoneCharge' [-1 because it does +1 always and 0-index]
                 DifficultyCounter = 0; //reset DifficultyCounter even tough it may not be used depening on choosen options
