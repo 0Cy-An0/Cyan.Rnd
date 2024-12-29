@@ -748,7 +748,7 @@ namespace An_Rnd
 
                 ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
                 //non-host check
-                if (!controller)
+                if (controller == null)
                 {
                     return orig(self);
                 }
@@ -858,6 +858,7 @@ namespace An_Rnd
         {
             orig(self);
             currentCell += 1; //increase counter cuse thing happened
+            if (currentCell > 8) currentCell = 8; //there was a error that i think happened if the reset errored on client; added just to be sure
             //non-host check
             if (!self.nullWards[self.currentRound - 1])
             {
