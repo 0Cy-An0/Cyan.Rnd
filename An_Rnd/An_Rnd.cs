@@ -65,7 +65,7 @@ namespace An_Rnd
         //for teleporter spawn/counters with mountain shrines
         public static bool useShrine = false;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
-        public static int[] latestInventoryItems;
+        public static int[] latestInventoryItems = new int[0]; //if i do not set a default, this causes problem with ProperSave
         //Will remove all pre-game(logbook, select, etc.) Hightlights automatically if true
         public static bool noHightlights = false;
         //Option for Crit-Stacking
@@ -110,7 +110,12 @@ namespace An_Rnd
 
         private void AddtionalCrits(On.RoR2.GlobalEventManager.orig_OnCrit orig, GlobalEventManager self, CharacterBody body, DamageInfo damageInfo, CharacterMaster master, float procCoefficient, ProcChainMask procChainMask)
         {
-            int critMult; //just to be extra sure using a temp int, because i do not want to test if body.critMultiplier is safe
+            if (!enableCrit)
+            {
+                orig(self, body, damageInfo, master, procCoefficient, procChainMask);
+                return;
+            }
+            int critMult; //just to be extra sure using a temp int, because i do not want to test if body.critMultiplier is safe (it turns out critMultiplier does, at least at this point, not effect the crit at all)
 
             //this should result in critMult being the number of 100% over, subtracting 1 because the first 100% is already used up for this first crit
             critMult = (int)(body.crit / 100f) - 1; //I am unsure why body.crit is stored as a float but 100% = 100f and not 1f
@@ -126,11 +131,17 @@ namespace An_Rnd
                 }
             }
 
-            //i do not want to test how safe body.critMultiplier is right now, so i just used and restored it as packed arround orig as possible
-            float ogMult = body.critMultiplier;
-            body.critMultiplier += critMult;
+            //if the option to multiply instead is on
+            if (critMults)
+            {
+                damageInfo.damage *= (int)Math.Pow(2, (double)critMult); //tried with body.CritMultiplier before which had not effect (calling orig and resetting after)
+            }
+            else
+            {
+                damageInfo.damage += critMult;
+            }
+
             orig(self, body, damageInfo, master, procCoefficient, procChainMask);
-            body.critMultiplier = ogMult;
         }
 
         private void InitPortalPrefab()
@@ -774,7 +785,7 @@ namespace An_Rnd
                 orig(self);
                 return;
             }
-            latestInventoryItems = null;
+            latestInventoryItems = new int[0];
             arenaCount = -1;
             orig(self);
         }
@@ -799,7 +810,7 @@ namespace An_Rnd
                 RemoveMatchingMonsterCards(controller); //Matching as in matching the filter given by the config option, which at this point i have not decieded on how to implement
 
                 //this should start the enemies with the items of the last attempts
-                if (latestInventoryItems != null)
+                if (latestInventoryItems.Length > 0)
                 {
                     // AddItemsFrom is a overloaded method, wich needs a filter to accept int[] as input; but we just want everything
                     Func<ItemIndex, bool> includeAllFilter = _ => true;
