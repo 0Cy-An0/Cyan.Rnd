@@ -67,7 +67,11 @@ namespace An_Rnd
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
         public static int[] latestInventoryItems;
         //Will remove all pre-game(logbook, select, etc.) Hightlights automatically if true
-        public static bool NoHightlights = false;
+        public static bool noHightlights = false;
+        //Option for Crit-Stacking
+        public static bool enableCrit = false;
+        //Option if second crit should multiply the crit damage by 2 (base *4) instead of just base damage *3;will effect third crits, etc. the same way
+        public static bool critMults = false;
         //Need a way to keep track if properSave was used. (relevant in 'ResetRunVars')
         public static bool wasLoaded = false;
         //max charge for all 9 cells (void fields)
@@ -98,10 +102,35 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
-            //On.RoR2.GenericObjectiveProvider.GenericObjectiveTracker;
+            On.RoR2.GlobalEventManager.OnCrit += AddtionalCrits;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
+        }
+
+        private void AddtionalCrits(On.RoR2.GlobalEventManager.orig_OnCrit orig, GlobalEventManager self, CharacterBody body, DamageInfo damageInfo, CharacterMaster master, float procCoefficient, ProcChainMask procChainMask)
+        {
+            int critMult; //just to be extra sure using a temp int, because i do not want to test if body.critMultiplier is safe
+
+            //this should result in critMult being the number of 100% over, subtracting 1 because the first 100% is already used up for this first crit
+            critMult = (int)(body.crit / 100f) - 1; //I am unsure why body.crit is stored as a float but 100% = 100f and not 1f
+            float remainingChance = body.crit % 100f;
+
+            //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even with from the same load (so using unity randomness just because it's probably close enough)
+            if (remainingChance > 0)
+            {
+                float roll = UnityEngine.Random.value * 100.0f;
+                if (roll < remainingChance)
+                {
+                    critMult += 1;
+                }
+            }
+
+            //i do not want to test how safe body.critMultiplier is right now, so i just used and restored it as packed arround orig as possible
+            float ogMult = body.critMultiplier;
+            body.critMultiplier += critMult;
+            orig(self, body, damageInfo, master, procCoefficient, procChainMask);
+            body.critMultiplier = ogMult;
         }
 
         private void InitPortalPrefab()
@@ -344,7 +373,21 @@ namespace An_Rnd
                 (
                     Config.Bind("General", "No Hightlights", false, "If enabled, anytime the game asks if you have viewed a 'viewable' it will skip the check and return true.\nThis should effect things like logbook entries and new characters/abilities in the select screen"),
                     typeof(bool),
-                    new Action<object>(value => NoHightlights = (bool)value),
+                    new Action<object>(value => noHightlights = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("General", "Crit Stacking", false, "If enabled, anytime a crit is rolled and the chance was over 100% there may be a second crit with the remainder, which amplifies the first\nwith default behaviour a crit(x2) deals x3 the base damage, where a crit(x1) would deal x2, this may be changed with the option below"),
+                    typeof(bool),
+                    new Action<object>(value => enableCrit = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("General", "Crit Stacking Multiplies", false, "If enabled, any second, third, etc. crits will not up the damage multiplier by just 1, but x2 instead\nfor example with a 200% crit chance the damage will always be x4 base damage as both crits are guranteed and the second amplifies the first x2 to x2 again"),
+                    typeof(bool),
+                    new Action<object>(value => critMults = (bool)value),
                     null,
                     null
                 ),
@@ -719,7 +762,7 @@ namespace An_Rnd
 
         private bool Viewed(On.RoR2.UserProfile.orig_HasViewedViewable orig, UserProfile self, string viewableName)
         {
-            if (NoHightlights) return true;
+            if (noHightlights) return true;
             return orig(self, viewableName);
         }
 

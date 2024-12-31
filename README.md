@@ -2,6 +2,8 @@
 
 Does Random stuff I wanted to have in the game:
  - Remove all Highlights from new unlocks (this is a option in the Settings)
+ - Option to enable Crit stacking past 100% and how (if next crit should only roll for a mult increase of +1 or *2)
+
  - Void Field portal is usable more than once
     - Monster inherit Items from previous Void Field stages
     - extra Void Field stages increase item drops and monster items
@@ -27,5 +29,3 @@ bugs/untested:
 - artifact of evolution
 - what happens with other orbs (like the void field rewards, there is currently no check were you are so if you get them somehwere else it should also give multiplied rewards)
 - loading sometimes errors (and i cannot find out why) [might be when the saved inventory is empty?]
-- empty blacklist causes everything to be removed
-- HyperCrit? (its depreacted right now and is probably not that complicated?)
