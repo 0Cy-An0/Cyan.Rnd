@@ -698,7 +698,7 @@ namespace An_Rnd
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
                 if (self.charge <= maxCharges[currentCell]) orig(self);
-                else if (self.charge < 0.99f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
+                else if (self.charge < 0.98f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
                 {
                     orig(self);
                     self.FullyChargeHoldoutZone();
@@ -1039,6 +1039,9 @@ namespace An_Rnd
         {
             List<int> toBeRemovedIndices = new List<int>();
             String[] BlacklistUsables = { }; //empty array as default so that even if an error occurs it will just act as if there is no blacklist
+            
+            //if the monsterBlackList just skip
+            if (monsterBlacklist.Equals("")) return;
             try
             {
                 BlacklistUsables = monsterBlacklist.Split(',');
@@ -1047,6 +1050,9 @@ namespace An_Rnd
             {
                 Log.Error($"Unable to parse Monster Blacklist: {ex.Message}");
             }
+
+            //check because this method caused errors on client in multiplayer sessions
+            if (controller.availableMonsterCards == null) return;
 
             for (int i = 0; i < controller.availableMonsterCards.Count; i++)
             {
@@ -1057,6 +1063,9 @@ namespace An_Rnd
                 bool isBlacklisted = false;
                 foreach (string blacklistItem in BlacklistUsables)
                 {
+                    //skip for potential faulty entries
+                    if (blacklistItem.Equals("")) continue;
+
                     if (directorCard.spawnCard.name.Contains(blacklistItem))
                     {
                         isBlacklisted = true;
