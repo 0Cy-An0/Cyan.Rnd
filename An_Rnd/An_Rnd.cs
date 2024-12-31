@@ -93,6 +93,7 @@ namespace An_Rnd
             // Init our logging class so that we can properly log for debugging
             Log.Init(Logger);
             InitPortalPrefab();
+            //I think there is like softDependcy or stuff with BepInEx... I did it in a worse way but it works so thats fine
             TryInitRiskOfOptions();
             TryInitProperSave();
 
@@ -103,9 +104,59 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
             On.RoR2.GlobalEventManager.OnCrit += AddtionalCrits;
+            On.RoR2.GlobalEventManager.OnHitEnemy += TestOnHit;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
+        }
+
+        private void TestOnHit(On.RoR2.GlobalEventManager.orig_OnHitEnemy orig, GlobalEventManager self, DamageInfo damageInfo, GameObject victim)
+        {
+            //abort if crit mod is disable or this is not a crit
+            if (!enableCrit || !damageInfo.crit)
+            {
+                orig(self, damageInfo, victim);
+                return;
+            }
+
+            if (damageInfo.attacker)
+            {
+                CharacterBody attacker = damageInfo.attacker.GetComponent<CharacterBody>();
+                if (attacker != null)
+                {
+                    int critMult;
+
+                    critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why body.crit is stored as a float but 100% = 100f and not 1f
+                    float remainingChance = attacker.crit % 100f;
+
+                    //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even with from the same load (so using unity randomness just because it's probably close enough)
+                    if (remainingChance > 0)
+                    {
+                        float roll = UnityEngine.Random.value * 100.0f;
+                        if (roll < remainingChance)
+                        {
+                            critMult += 1;
+                        }
+                    }
+
+                    float ogMult = attacker.critMultiplier; //i do not want to edit the Multiplier permantly, and i do not know if its reset after calling orig
+                    //if the option to multiply instead is on
+                    if (critMults)
+                    {
+                        attacker.critMultiplier *= (int)Math.Pow(2, (double)critMult);
+                    }
+                    else
+                    {
+                        attacker.critMultiplier += critMult;
+                    }
+
+                    orig(self, damageInfo, victim);
+                    attacker.critMultiplier = ogMult;
+                    return;
+                }
+            }
+            
+            orig(self, damageInfo, victim);
         }
 
         private void AddtionalCrits(On.RoR2.GlobalEventManager.orig_OnCrit orig, GlobalEventManager self, CharacterBody body, DamageInfo damageInfo, CharacterMaster master, float procCoefficient, ProcChainMask procChainMask)
@@ -680,7 +731,7 @@ namespace An_Rnd
                     object configInstance = Activator.CreateInstance(configType);
                     configType.GetField("min")?.SetValue(configInstance, (int)min);
                     configType.GetField("max")?.SetValue(configInstance, (int)max);
-                    Log.Info($"Option {config.Definition.Key} as IntSlider");
+                    Log.Info($"Added RiskOfOption '{config.Definition.Key}' as IntSlider");
                     return Activator.CreateInstance(baseOptionType, config, configInstance);
                 }
                 else if (varType == typeof(float))
@@ -709,20 +760,20 @@ namespace An_Rnd
                         Log.Warning($"Unable to set Max property for {config.Definition.Key}");
                     }
 
-                    Log.Info($"Option {config.Definition.Key} as FloatField");
+                    Log.Info($"Added RiskOfOption '{config.Definition.Key}' as FloatField");
                     return Activator.CreateInstance(baseOptionType, config, configInstance);
                 }
                 else if (varType == typeof(bool))
                 {
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.CheckBoxOption, RiskOfOptions");
-                    Log.Info($"Option {config.Definition.Key} as CheckBox");
+                    Log.Info($"Added RiskOfOption '{config.Definition.Key}' as CheckBox");
                     return Activator.CreateInstance(baseOptionType, config);
                 }
                 else if (varType == typeof(String))
                 {
                     Type baseOptionType = Type.GetType("RiskOfOptions.Options.StringInputFieldOption, RiskOfOptions");
 
-                    Log.Info($"Option {config.Definition.Key} as StringInputField");
+                    Log.Info($"Added RiskOfOption '{config.Definition.Key}' as StringInputField");
                     return Activator.CreateInstance(baseOptionType, config);
                 }
                 else
