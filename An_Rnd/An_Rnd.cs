@@ -103,76 +103,35 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
-            On.RoR2.GlobalEventManager.OnCrit += AddtionalCrits;
-            On.RoR2.GlobalEventManager.OnHitEnemy += TestOnHit;
+            On.RoR2.HealthComponent.TakeDamage += TestTakeDmg;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
         }
 
-        private void TestOnHit(On.RoR2.GlobalEventManager.orig_OnHitEnemy orig, GlobalEventManager self, DamageInfo damageInfo, GameObject victim)
+        //it seemed like any modification to/with damageInfo before this point did not reach to here, not sure why
+        private void TestTakeDmg(On.RoR2.HealthComponent.orig_TakeDamage orig, HealthComponent self, DamageInfo damageInfo)
         {
-            //abort if crit mod is disable or this is not a crit
-            if (!enableCrit || !damageInfo.crit)
+            //abort if crit mod is disable or this is not a crit or there is no attacker
+            if (!enableCrit || !damageInfo.crit || !damageInfo.attacker)
             {
-                orig(self, damageInfo, victim);
+                orig(self, damageInfo);
                 return;
             }
 
-            if (damageInfo.attacker)
+            CharacterBody attacker = damageInfo.attacker.GetComponent<CharacterBody>();
+            if (attacker == null) //also abort if attacker has no characterBody
             {
-                CharacterBody attacker = damageInfo.attacker.GetComponent<CharacterBody>();
-                if (attacker != null)
-                {
-                    int critMult;
-
-                    critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why body.crit is stored as a float but 100% = 100f and not 1f
-                    float remainingChance = attacker.crit % 100f;
-
-                    //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even with from the same load (so using unity randomness just because it's probably close enough)
-                    if (remainingChance > 0)
-                    {
-                        float roll = UnityEngine.Random.value * 100.0f;
-                        if (roll < remainingChance)
-                        {
-                            critMult += 1;
-                        }
-                    }
-
-                    float ogMult = attacker.critMultiplier; //i do not want to edit the Multiplier permantly, and i do not know if its reset after calling orig
-                    //if the option to multiply instead is on
-                    if (critMults)
-                    {
-                        attacker.critMultiplier *= (int)Math.Pow(2, (double)critMult);
-                    }
-                    else
-                    {
-                        attacker.critMultiplier += critMult;
-                    }
-
-                    orig(self, damageInfo, victim);
-                    attacker.critMultiplier = ogMult;
-                    return;
-                }
-            }
-            
-            orig(self, damageInfo, victim);
-        }
-
-        private void AddtionalCrits(On.RoR2.GlobalEventManager.orig_OnCrit orig, GlobalEventManager self, CharacterBody body, DamageInfo damageInfo, CharacterMaster master, float procCoefficient, ProcChainMask procChainMask)
-        {
-            if (!enableCrit)
-            {
-                orig(self, body, damageInfo, master, procCoefficient, procChainMask);
+                orig(self, damageInfo);
                 return;
             }
-            int critMult; //just to be extra sure using a temp int, because i do not want to test if body.critMultiplier is safe (it turns out critMultiplier does, at least at this point, not effect the crit at all)
 
-            //this should result in critMult being the number of 100% over, subtracting 1 because the first 100% is already used up for this first crit
-            critMult = (int)(body.crit / 100f) - 1; //I am unsure why body.crit is stored as a float but 100% = 100f and not 1f
-            float remainingChance = body.crit % 100f;
+            int critMult;
 
-            //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even with from the same load (so using unity randomness just because it's probably close enough)
+            critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why body.crit is stored as a float but 100% = 100f and not 1f
+            float remainingChance = attacker.crit % 100f;
+
+            //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even from the same load (so using normal unity randomness just because it's probably close enough)
             if (remainingChance > 0)
             {
                 float roll = UnityEngine.Random.value * 100.0f;
@@ -182,17 +141,20 @@ namespace An_Rnd
                 }
             }
 
-            //if the option to multiply instead is on
+            //critMultiplier is very shortly increase to the desired value for the dmg calculation and reset after
+            float OGMult = attacker.critMultiplier;
             if (critMults)
             {
-                damageInfo.damage *= (int)Math.Pow(2, (double)critMult); //tried with body.CritMultiplier before which had not effect (calling orig and resetting after)
+                attacker.critMultiplier += (int)Math.Pow(2, (double)critMult);
             }
             else
             {
-                damageInfo.damage += critMult;
+                attacker.critMultiplier += critMult;
             }
 
-            orig(self, body, damageInfo, master, procCoefficient, procChainMask);
+            orig(self, damageInfo);
+            attacker.critMultiplier = OGMult;
+            return;
         }
 
         private void InitPortalPrefab()
