@@ -103,14 +103,14 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
-            On.RoR2.HealthComponent.TakeDamage += TestTakeDmg;
+            On.RoR2.HealthComponent.TakeDamage += TakeDamage;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
         }
 
         //it seemed like any modification to/with damageInfo before this point did not reach to here, not sure why
-        private void TestTakeDmg(On.RoR2.HealthComponent.orig_TakeDamage orig, HealthComponent self, DamageInfo damageInfo)
+        private void TakeDamage(On.RoR2.HealthComponent.orig_TakeDamage orig, HealthComponent self, DamageInfo damageInfo)
         {
             //abort if crit mod is disable or this is not a crit or there is no attacker
             if (!enableCrit || !damageInfo.crit || !damageInfo.attacker)
@@ -128,7 +128,7 @@ namespace An_Rnd
 
             int critMult;
 
-            critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why body.crit is stored as a float but 100% = 100f and not 1f
+            critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why attacker.crit is stored as a float but 100% = 100f and not 1f
             float remainingChance = attacker.crit % 100f;
 
             //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even from the same load (so using normal unity randomness just because it's probably close enough)
