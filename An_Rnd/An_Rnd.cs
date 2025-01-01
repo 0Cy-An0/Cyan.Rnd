@@ -68,6 +68,8 @@ namespace An_Rnd
         public static int[] latestInventoryItems = new int[0]; //if i do not set a default, this causes problem with ProperSave
         //Will remove all pre-game(logbook, select, etc.) Hightlights automatically if true
         public static bool noHightlights = false;
+        //Option for Bleed-Stacking
+        public static bool enableBleed = false;
         //Option for Crit-Stacking
         public static bool enableCrit = false;
         //Option if second crit should multiply the crit damage by 2 (base *4) instead of just base damage *3;will effect third crits, etc. the same way
@@ -103,16 +105,54 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
-            On.RoR2.HealthComponent.TakeDamage += TakeDamage;
+            On.RoR2.HealthComponent.TakeDamage += ExtraCrit;
+            On.RoR2.DotController.AddDot += ExtraBleed;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
         }
 
-        //it seemed like any modification to/with damageInfo before this point did not reach to here, not sure why
-        private void TakeDamage(On.RoR2.HealthComponent.orig_TakeDamage orig, HealthComponent self, DamageInfo damageInfo)
+        private void ExtraBleed(On.RoR2.DotController.orig_AddDot orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
         {
-            //abort if crit mod is disable or this is not a crit or there is no attacker
+            CharacterBody attacker = attackerObject.GetComponent<CharacterBody>();
+
+            //check for if the option is enabled, this add is about a bleed stack and there is a attacker (i cant get the bleed chance otherwise)
+            if (!enableBleed || DotController.DotIndex.Bleed != dotIndex || attacker == null)
+            {
+                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
+                return;
+            }
+
+            int extraBleedStacks = (int)(attacker.bleedChance / 100f) - 1; //same as crit, no idea why store it as 100f = 100% and not 1f = 100%
+            if (extraBleedStacks < 0) //no change if the bleed chance, is below 100%
+            {
+                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
+                return;
+            }
+            float remainingChance = attacker.bleedChance % 100f;
+
+            //Im just did same rng as for crit (check my notes there for more info as to why this is this way) without making super sure
+            if (remainingChance > 0)
+            {
+                float roll = UnityEngine.Random.value * 100.0f;
+                if (roll < remainingChance)
+                {
+                    extraBleedStacks += 1;
+                }
+            }
+
+            orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
+            //repeating Add_Dot, for each extra Stack, which hopefully means they are added correctly
+            for (int i = 0; i < extraBleedStacks; i++)
+            {
+                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
+            }
+        }
+
+        //it seemed like any modification to/with damageInfo before this point did not reach to here, not sure why
+        private void ExtraCrit(On.RoR2.HealthComponent.orig_TakeDamage orig, HealthComponent self, DamageInfo damageInfo)
+        {
+            //abort if crit modification is disable or this is not a crit or there is no attacker
             if (!enableCrit || !damageInfo.crit || !damageInfo.attacker)
             {
                 orig(self, damageInfo);
@@ -126,9 +166,12 @@ namespace An_Rnd
                 return;
             }
 
-            int critMult;
-
-            critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why attacker.crit is stored as a float but 100% = 100f and not 1f
+            int critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why attacker.crit is stored as a float but 100% = 100f and not 1f
+            if (critMult < 0) //no change if the crit chance, is below 100%
+            {
+                orig(self, damageInfo);
+                return;
+            }
             float remainingChance = attacker.crit % 100f;
 
             //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even from the same load (so using normal unity randomness just because it's probably close enough)
@@ -398,6 +441,13 @@ namespace An_Rnd
                     Config.Bind("General", "No Hightlights", false, "If enabled, anytime the game asks if you have viewed a 'viewable' it will skip the check and return true.\nThis should effect things like logbook entries and new characters/abilities in the select screen"),
                     typeof(bool),
                     new Action<object>(value => noHightlights = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("General", "Bleed Stacking", false, "If enabled, anytime a bleed effect is applied and the chance was over 100% there may be a second bleed stack with the remainder, which is added at the same time\nso with 600% crit chance you get 6 bleed stacks per hit"),
+                    typeof(bool),
+                    new Action<object>(value => enableCrit = (bool)value),
                     null,
                     null
                 ),

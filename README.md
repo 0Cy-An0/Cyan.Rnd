@@ -3,6 +3,7 @@
 Does Random stuff I wanted to have in the game:
  - Remove all Highlights from new unlocks (this is a option in the Settings)
  - Option to enable Crit stacking past 100% and how (if next crit should only roll for a mult increase of +1 or *2)
+ - Option to enable Bleed stacking past 100%
 
  - Void Field portal is usable more than once
     - Monster inherit Items from previous Void Field stages
@@ -23,7 +24,8 @@ Currently just ideas:
 
 - void field stuff
     - add monsters from spawn (card?) pool
-    - might add a option to get all three items via round robin
+    - option to get all three items via round robin?
+    - option to increase stage after leaving depening on current difficulty scaling
 
 bugs/untested:
 - artifact of evolution
