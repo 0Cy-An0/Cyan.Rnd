@@ -538,7 +538,7 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("Void Fields", "Extra Credits", 0, "How many extra credits are given to the void fields per active mountain shrine\n0 for disabled[i mean you add 0, so...]\nI am not 100% sure but unused RoR2 may move unused credits to the next stage combat director"),
+                    Config.Bind("Void Fields", "Extra Credits", 0f, "How many extra credits are given to the void fields per active mountain shrine\n0 for disabled[i mean you add 0, so...]\nI am not 100% sure but unused RoR2 may move unused credits to the next stage combat director"),
                     typeof(float),
                     new Action<object>(value => extraMonsterCredits = (float)value),
                     0f,
