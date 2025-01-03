@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using ProperSave.Data;
 using System.Linq;
 using UnityEngine.Networking;
+using EntityStates.AffixVoid;
 
 namespace An_Rnd
 {
@@ -76,6 +77,8 @@ namespace An_Rnd
         public static bool enableCrit = false;
         //Option if second crit should multiply the crit damage by 2 (base *4) instead of just base damage *3;will effect third crits, etc. the same way
         public static bool critMults = false;
+        //Option to add items to inventory directly
+        public static bool preventDrops = false;
         //Need a way to keep track if properSave was used. (relevant in 'ResetRunVars')
         public static bool wasLoaded = false;
         //max charge for all 9 cells (void fields)
@@ -86,6 +89,8 @@ namespace An_Rnd
         public static float chargeDurationMult = 0f;
         //current cell Counter for the void fields; used for 'maxCharges'
         public static int currentCell = -1;
+        //current PlayerCounter for item distribution
+        public static int currentPlayer = 0;
         //only used if useShrine is false; substitutes/is substituted by mountain shrines
         public static int DifficultyCounter = 0;
         //should be what exactly what the name says. Check method 'RemoveMatchingMonsterCards' for specific use
@@ -107,6 +112,8 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
+            On.RoR2.GenericPickupController.CreatePickup += AddItemDirectly;
+            On.RoR2.PickupDropletController.CreatePickup += Pickup;
             On.RoR2.HealthComponent.TakeDamage += ExtraCrit;
             On.RoR2.DotController.AddDot += ExtraBleed;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
@@ -114,92 +121,10 @@ namespace An_Rnd
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
         }
 
-        private void ExtraBleed(On.RoR2.DotController.orig_AddDot orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
+        private void Pickup(On.RoR2.PickupDropletController.orig_CreatePickup orig, PickupDropletController self)
         {
-            CharacterBody attacker = attackerObject.GetComponent<CharacterBody>();
-
-            //check for if the option is enabled, this add is about a bleed stack and there is a attacker (i cant get the bleed chance otherwise)
-            if (!enableBleed || DotController.DotIndex.Bleed != dotIndex || attacker == null)
-            {
-                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
-                return;
-            }
-
-            int extraBleedStacks = (int)(attacker.bleedChance / 100f) - 1; //same as crit, no idea why store it as 100f = 100% and not 1f = 100%
-            if (extraBleedStacks < 0) //no change if the bleed chance, is below 100%
-            {
-                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
-                return;
-            }
-            float remainingChance = attacker.bleedChance % 100f;
-
-            //Im just did same rng as for crit (check my notes there for more info as to why this is this way) without making super sure
-            if (remainingChance > 0)
-            {
-                float roll = UnityEngine.Random.value * 100.0f;
-                if (roll < remainingChance)
-                {
-                    extraBleedStacks += 1;
-                }
-            }
-
-            orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
-            //repeating Add_Dot, for each extra Stack, which hopefully means they are added correctly
-            for (int i = 0; i < extraBleedStacks; i++)
-            {
-                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
-            }
-        }
-
-        //it seemed like any modification to/with damageInfo before this point did not reach to here, not sure why
-        private void ExtraCrit(On.RoR2.HealthComponent.orig_TakeDamage orig, HealthComponent self, DamageInfo damageInfo)
-        {
-            //abort if crit modification is disable or this is not a crit or there is no attacker
-            if (!enableCrit || !damageInfo.crit || !damageInfo.attacker)
-            {
-                orig(self, damageInfo);
-                return;
-            }
-
-            CharacterBody attacker = damageInfo.attacker.GetComponent<CharacterBody>();
-            if (attacker == null) //also abort if attacker has no characterBody
-            {
-                orig(self, damageInfo);
-                return;
-            }
-
-            int critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why attacker.crit is stored as a float but 100% = 100f and not 1f
-            if (critMult < 0) //no change if the crit chance, is below 100%
-            {
-                orig(self, damageInfo);
-                return;
-            }
-            float remainingChance = attacker.crit % 100f;
-
-            //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even from the same load (so using normal unity randomness just because it's probably close enough)
-            if (remainingChance > 0)
-            {
-                float roll = UnityEngine.Random.value * 100.0f;
-                if (roll < remainingChance)
-                {
-                    critMult += 1;
-                }
-            }
-
-            //critMultiplier is very shortly increase to the desired value for the dmg calculation and reset after
-            float OGMult = attacker.critMultiplier;
-            if (critMults)
-            {
-                attacker.critMultiplier += (int)Math.Pow(2, (double)critMult);
-            }
-            else
-            {
-                attacker.critMultiplier += critMult;
-            }
-
-            orig(self, damageInfo);
-            attacker.critMultiplier = OGMult;
-            return;
+            //Log.Info($"Create Pickup, Controller ID: {self.playerControllerId}, {self.createPickupInfo.pickupIndex}");
+            orig(self);
         }
 
         private void InitPortalPrefab()
@@ -443,6 +368,13 @@ namespace An_Rnd
                     Config.Bind("General", "No Hightlights", false, "If enabled, anytime the game asks if you have viewed a 'viewable' it will skip the check and return true.\nThis should effect things like logbook entries and new characters/abilities in the select screen"),
                     typeof(bool),
                     new Action<object>(value => noHightlights = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("General", "Prevent ItemDrops", false, "If enabled, stops normal item creation and adds them to the players inventory directly\nIterates over all players if Multiplayer"),
+                    typeof(bool),
+                    new Action<object>(value => preventDrops = (bool)value),
                     null,
                     null
                 ),
@@ -811,42 +743,118 @@ namespace An_Rnd
         }
 
         //below this comment are hooks and stuff, above should only be awake/Init type stuff. (very good explain: me)
-        public void ZoneCharge(On.RoR2.HoldoutZoneController.orig_Update orig, HoldoutZoneController self)
-        {
-            //non-host check
-            if (!self)
-            {
-                orig(self);
-                return;
-            }
-
-            //Custom charge logic only applies in the void fields, otherwise the normal tp would be affected
-            if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
-            {
-                if (self.charge <= maxCharges[currentCell]) orig(self);
-                else if (self.charge < 0.98f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
-                {
-                    orig(self);
-                    self.FullyChargeHoldoutZone();
-                }
-                else
-                {
-                    //this should be last cell; maybe not even but just to be sure
-                    orig(self);
-                }
-            }
-            else
-            {
-                //this should be the normal teleporter
-                orig(self);
-            }
-
-        }
-
         private bool Viewed(On.RoR2.UserProfile.orig_HasViewedViewable orig, UserProfile self, string viewableName)
         {
             if (noHightlights) return true;
             return orig(self, viewableName);
+        }
+
+        private GenericPickupController AddItemDirectly(On.RoR2.GenericPickupController.orig_CreatePickup orig, ref GenericPickupController.CreatePickupInfo createPickupInfo)
+        {
+            ItemIndex item = createPickupInfo.pickupIndex.pickupDef.itemIndex;
+            if (preventDrops && item != ItemIndex.None)
+            {
+                //I think this check looks a bit wired, but its because i also want it to work even if a player suddendly leaves
+                if (currentPlayer >= PlayerCharacterMasterController.instances.Count)
+                {
+                    currentPlayer = 0;
+                }
+                PlayerCharacterMasterController player = PlayerCharacterMasterController.instances[currentPlayer];
+                currentPlayer++;
+
+                player.body.inventory.GiveItem(item);
+
+                return null;
+            }
+            return orig(ref createPickupInfo);
+        }
+
+        private void ExtraBleed(On.RoR2.DotController.orig_AddDot orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
+        {
+            CharacterBody attacker = attackerObject.GetComponent<CharacterBody>();
+
+            //check for if the option is enabled, this add is about a bleed stack and there is a attacker (i cant get the bleed chance otherwise)
+            if (!enableBleed || DotController.DotIndex.Bleed != dotIndex || attacker == null)
+            {
+                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
+                return;
+            }
+
+            int extraBleedStacks = (int)(attacker.bleedChance / 100f) - 1; //same as crit, no idea why store it as 100f = 100% and not 1f = 100%
+            if (extraBleedStacks < 0) //no change if the bleed chance, is below 100%
+            {
+                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
+                return;
+            }
+            float remainingChance = attacker.bleedChance % 100f;
+
+            //Im just did same rng as for crit (check my notes there for more info as to why this is this way) without making super sure
+            if (remainingChance > 0)
+            {
+                float roll = UnityEngine.Random.value * 100.0f;
+                if (roll < remainingChance)
+                {
+                    extraBleedStacks += 1;
+                }
+            }
+
+            orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
+            //repeating Add_Dot, for each extra Stack, which hopefully means they are added correctly
+            for (int i = 0; i < extraBleedStacks; i++)
+            {
+                orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
+            }
+        }
+
+        //it seemed like any modification to/with damageInfo before this point did not reach to here, not sure why
+        private void ExtraCrit(On.RoR2.HealthComponent.orig_TakeDamage orig, HealthComponent self, DamageInfo damageInfo)
+        {
+            //abort if crit modification is disable or this is not a crit or there is no attacker
+            if (!enableCrit || !damageInfo.crit || !damageInfo.attacker)
+            {
+                orig(self, damageInfo);
+                return;
+            }
+
+            CharacterBody attacker = damageInfo.attacker.GetComponent<CharacterBody>();
+            if (attacker == null) //also abort if attacker has no characterBody
+            {
+                orig(self, damageInfo);
+                return;
+            }
+
+            int critMult = (int)(attacker.crit / 100f) - 1; //I am unsure why attacker.crit is stored as a float but 100% = 100f and not 1f
+            if (critMult < 0) //no change if the crit chance, is below 100%
+            {
+                orig(self, damageInfo);
+                return;
+            }
+            float remainingChance = attacker.crit % 100f;
+
+            //i could not find a rng object for the crits, and testing with properSave showed apperant randomness even from the same load (so using normal unity randomness just because it's probably close enough)
+            if (remainingChance > 0)
+            {
+                float roll = UnityEngine.Random.value * 100.0f;
+                if (roll < remainingChance)
+                {
+                    critMult += 1;
+                }
+            }
+
+            //critMultiplier is very shortly increase to the desired value for the dmg calculation and reset after
+            float OGMult = attacker.critMultiplier;
+            if (critMults)
+            {
+                attacker.critMultiplier += (int)Math.Pow(2, (double)critMult);
+            }
+            else
+            {
+                attacker.critMultiplier += critMult;
+            }
+
+            orig(self, damageInfo);
+            attacker.critMultiplier = OGMult;
+            return;
         }
 
         private void ResetRunVars(On.RoR2.Run.orig_Start orig, Run self)
@@ -926,6 +934,11 @@ namespace An_Rnd
             int toAdd = numShrines * arenaCount;
             if (expScaling && toAdd > 0) //i think it would add 1 shrine anyway if i do not check that its disabled here
             {
+                if (TeleporterInteraction.instance.shrineBonusStacks <= 0)
+                {
+                    TeleporterInteraction.instance.AddShrineStack();
+                    toAdd -= 1; //toAdd might now be 0, in which case we do 1 unnecessary calculation, but its not that bad
+                }
                 toAdd = (int)(TeleporterInteraction.instance.shrineBonusStacks * Math.Pow(2.0, toAdd)) - TeleporterInteraction.instance.shrineBonusStacks;
             }
 
@@ -938,17 +951,36 @@ namespace An_Rnd
 
         }
 
-        //just to note for future reference, using this caused some weird error. Maybe something else was going on at the time, but for now ill say it does not work
-        private IEnumerator VoidTele()
+        public void ZoneCharge(On.RoR2.HoldoutZoneController.orig_Update orig, HoldoutZoneController self)
         {
-            //i want to avoid the teleportor showing up on the objectives list, and i am unsure when and were this happens. could search for a hook, could try this instead
-            yield return new WaitForSeconds(0.1f);
-
-            GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
-            for (int i = 0; i < arenaCount * numShrines; i++)
+            //non-host check
+            if (!self)
             {
-                TeleporterInteraction.instance.AddShrineStack();
+                orig(self);
+                return;
             }
+
+            //Custom charge logic only applies in the void fields, otherwise the normal tp would be affected
+            if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
+            {
+                if (self.charge <= maxCharges[currentCell]) orig(self);
+                else if (self.charge < 0.98f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
+                {
+                    orig(self);
+                    self.FullyChargeHoldoutZone();
+                }
+                else
+                {
+                    //this should be last cell; maybe not even but just to be sure
+                    orig(self);
+                }
+            }
+            else
+            {
+                //this should be the normal teleporter
+                orig(self);
+            }
+
         }
 
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
@@ -968,21 +1000,12 @@ namespace An_Rnd
             {
                 orig(self, pickupIndex);
             }
-        }
 
-        private IEnumerator ChunkRewards(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
-        {
-            int totalItems;
-            if (useShrine) totalItems = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
-            else totalItems = Math.Max((int)Math.Floor(DifficultyCounter * extraRewards), 1);
-            //if mountain shrines are 0, it should still give 1 item (first run)
-            for (int i = 0; i < totalItems; i++)
-            {
-                orig(self, pickupIndex);
-
-                // Wait for 1 second after each chunk
-                if (i > 0 && i % chunkSize == 0) yield return new WaitForSeconds(1f);
-            }
+            Log.Info($"Id For current Player controller?: {self.playerControllerId}");
+            
+            /*int count = PlayerCharacterMasterController.instances.Count;
+            PlayerCharacterMasterController player = PlayerCharacterMasterController.instances[self.playerControllerId];
+            Log.Info($"Player: {player.name} opened void Potential");*/
         }
 
         private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
