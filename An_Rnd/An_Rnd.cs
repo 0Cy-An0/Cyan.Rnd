@@ -121,6 +121,7 @@ namespace An_Rnd
             //check for if the option is enabled, this add is about a bleed stack and there is a attacker (i cant get the bleed chance otherwise)
             if (!enableBleed || DotController.DotIndex.Bleed != dotIndex || attacker == null)
             {
+                Log.Info($"no bleed: !{enableBleed}, {DotController.DotIndex.Bleed}!={dotIndex}, {attacker}");
                 orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
                 return;
             }
@@ -128,6 +129,7 @@ namespace An_Rnd
             int extraBleedStacks = (int)(attacker.bleedChance / 100f) - 1; //same as crit, no idea why store it as 100f = 100% and not 1f = 100%
             if (extraBleedStacks < 0) //no change if the bleed chance, is below 100%
             {
+                Log.Info($"no bleed: {extraBleedStacks}; {attacker.bleedChance}");
                 orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
                 return;
             }
@@ -141,6 +143,7 @@ namespace An_Rnd
                 {
                     extraBleedStacks += 1;
                 }
+                Log.Info($"extra Bleed {extraBleedStacks}");
             }
 
             orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
@@ -449,7 +452,7 @@ namespace An_Rnd
                 (
                     Config.Bind("General", "Bleed Stacking", false, "If enabled, anytime a bleed effect is applied and the chance was over 100% there may be a second bleed stack with the remainder, which is added at the same time\nso with 600% crit chance you get 6 bleed stacks per hit"),
                     typeof(bool),
-                    new Action<object>(value => enableCrit = (bool)value),
+                    new Action<object>(value => enableBleed = (bool)value),
                     null,
                     null
                 ),
