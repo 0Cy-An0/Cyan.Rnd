@@ -35,7 +35,9 @@ namespace An_Rnd
 
         public static int arenaCount = -1; //this will count how many times the void fields were entered; just using the name convention of base RoR2 for the stage
         //starts at -1 so that first entry is 0
-  
+
+        //Cap for arenaCounter
+        public static int arenaCap = 0;
         //Will make this a riskofOptionsOption, probably, in the future; If this even does anything by then, which it does not currenlty, while i am adding Options
         public static int chunkSize = 50;
         //how many shrines shall activate per entry of the fields; first entry is always base game 0
@@ -49,7 +51,7 @@ namespace An_Rnd
         //How many shrines need to be active for the above option to increase by 1. Will set on entry to active / Threshold (int div). [you may notice some of these comments may be almost to entirely copy-paste]
         public static int extraMonsterTypesThreshold = 0;
         //how many credits are added per active shrine to the arena base credits
-        public static int extraMonsterCredits = 0;
+        public static float extraMonsterCredits = 0;
         //How many extra items are given to the enemies per active mountain shrine (Rounded down based on the number normally given)
         public static float extraItems = 0f;
         //How many items are spawned after picking per active mountain shrine (Rounded down, because i can't spawn fractions of items)
@@ -473,7 +475,7 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("Void Fields", "Number of Shrines", 5, "Number of shrines activated per additional void field entry."),
+                    Config.Bind("Void Fields", "Number of Shrines", 5, "Number of shrines activated per additional void field entry\n with unmodded first entry it goes 0,num,2xnum,3xnum,..."),
                     typeof(int),
                     new Action<object>(value => numShrines = (int)value),
                     0,
@@ -492,6 +494,13 @@ namespace An_Rnd
                     new Action<object>(value => expScaling = (bool)value),
                     null,
                     null
+                ),
+                (
+                    Config.Bind("Void Fields", "Stage Counter Cap", 0, "Sets a cap for the Stage Counter, which is what 'Number of Shrines' is multiplied by\n0 for disabled\nThis only effects what is added if you, for example, use shrines and have a persistent shrine mod they will still be uncapped and will just always scale by the current settings *Cap at most"),
+                    typeof(int),
+                    new Action<object>(value => arenaCap = (int)value),
+                    0,
+                    1000
                 ),
                 (
                     Config.Bind("Void Fields", "Enemy ItemStacks", 1, "Sets the number of itemStacks the void fields enemies can obtain.\n1 per activation is vanilla, but with this you can get for example goat's hoof and crit classes at the same time\ndisabled if Kill Me is checked"),
@@ -529,11 +538,11 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("Void Fields", "Extra Credits", 0, "How many extra credits are given to the void fields per active mountain shrine\n0 for disabled[i mean x+0=x...]"),
-                    typeof(int),
-                    new Action<object>(value => extraMonsterCredits = (int)value),
-                    0,
-                    10000
+                    Config.Bind("Void Fields", "Extra Credits", 0, "How many extra credits are given to the void fields per active mountain shrine\n0 for disabled[i mean you add 0, so...]\nI am not 100% sure but unused RoR2 may move unused credits to the next stage combat director"),
+                    typeof(float),
+                    new Action<object>(value => extraMonsterCredits = (float)value),
+                    0f,
+                    10000f
                 ),
                 (
                     Config.Bind("Void Fields", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine.\n0 for disable"),
@@ -860,6 +869,7 @@ namespace An_Rnd
             {
                 if (skipVanilla && arenaCount < 0) arenaCount = 0;
                 arenaCount += 1; //counter how often we entered the void fields
+                if (arenaCap > 0 && arenaCount > arenaCap) arenaCount = arenaCap;
                 currentCell = -1; //reset current Cell counter; example use in 'ActivateCell' and 'ZoneCharge' [-1 because it does +1 always and 0-index]
                 DifficultyCounter = 0; //reset DifficultyCounter even tough it may not be used depening on choosen options
 
@@ -913,20 +923,18 @@ namespace An_Rnd
         {
             yield return new WaitForSeconds(0.1f);
 
-            int toAdd = numShrines;
+            int toAdd = numShrines * arenaCount;
             if (expScaling && toAdd > 0) //i think it would add 1 shrine anyway if i do not check that its disabled here
             {
                 toAdd = (int)(TeleporterInteraction.instance.shrineBonusStacks * Math.Pow(2.0, toAdd)) - TeleporterInteraction.instance.shrineBonusStacks;
             }
 
-            for (int i = 0; i < arenaCount * toAdd; i++)
+            for (int i = 0; i < toAdd; i++)
             {
                 TeleporterInteraction.instance.AddShrineStack(); //So i am not 100% sure what else happens other than shrineBonusStacks += 1, but there are hooks and such, so i used a loop here
             }
             //adding the extra Credits from the config
-            Log.Info($"Base Credits before: {controller.baseMonsterCredit}");
             controller.baseMonsterCredit += extraMonsterCredits * TeleporterInteraction.instance.shrineBonusStacks;
-            Log.Info($"Base Credits after: {controller.baseMonsterCredit}");
 
         }
 
