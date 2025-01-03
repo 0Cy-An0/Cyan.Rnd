@@ -1,5 +1,4 @@
 using BepInEx;
-using R2API;
 using RoR2;
 using System;
 using System.Collections;
@@ -11,15 +10,10 @@ using System.Collections.Generic;
 using ProperSave.Data;
 using System.Linq;
 using UnityEngine.Networking;
-using EntityStates.AffixVoid;
 
 namespace An_Rnd
 {
-    //RoR2Api Dependecys
-    [BepInDependency(ItemAPI.PluginGUID)]
-
-    [BepInDependency(LanguageAPI.PluginGUID)]
-
+    //RoR2API stuff
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
 
     public class An_Rnd : BaseUnityPlugin
@@ -95,6 +89,18 @@ namespace An_Rnd
         public static int DifficultyCounter = 0;
         //should be what exactly what the name says. Check method 'RemoveMatchingMonsterCards' for specific use
         public static String monsterBlacklist = "";
+        //Will update on Stage start to contain all Printers, Scrappers, Cauldrons and the portal. Used to determin which gameobject spawned a given droplet
+        public static List<GameObject> purchaseInteractables = new List<GameObject>(); //do not ask me why the component thingy, which the list is named after, is named PurchaseInteraction if its used for things that cost something and things without
+        //look at the trees (names); patterns to find stuff for the list above
+        public static string[] requiredPatterns =
+        [
+            "TripleShop",
+            "Scrapper",
+            "Chest",      // should cover chest variations like Chest1, Chest2, GoldChest, CategoryChestUtility, etc.
+            "Duplicator",
+            "ShrineChance",
+            "Cauldron"    // should cover all Cauldron variations
+        ];
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -113,18 +119,12 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
             On.RoR2.GenericPickupController.CreatePickup += AddItemDirectly;
-            On.RoR2.PickupDropletController.CreatePickup += Pickup;
+            On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 += AddDropletDirectly;
             On.RoR2.HealthComponent.TakeDamage += ExtraCrit;
             On.RoR2.DotController.AddDot += ExtraBleed;
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
-        }
-
-        private void Pickup(On.RoR2.PickupDropletController.orig_CreatePickup orig, PickupDropletController self)
-        {
-            //Log.Info($"Create Pickup, Controller ID: {self.playerControllerId}, {self.createPickupInfo.pickupIndex}");
-            orig(self);
         }
 
         private void InitPortalPrefab()
@@ -769,6 +769,56 @@ namespace An_Rnd
             return orig(ref createPickupInfo);
         }
 
+        //this creates droplet objects which then turn into items, but thousands of them cause too much lag
+        private void AddDropletDirectly(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 orig, GenericPickupController.CreatePickupInfo pickupInfo, Vector3 position, Vector3 velocity)
+        {
+            ItemIndex item = pickupInfo.pickupIndex.pickupDef.itemIndex;
+            if (!preventDrops || item == ItemIndex.None)
+            {
+                orig(pickupInfo, position, velocity);
+                return;
+            }
+
+            GameObject smoll = null;
+            float smallestDistance = float.MaxValue;
+
+            //I have named the var for GameObject like this because they could be the ones responsible for this PickupDroplet
+            foreach (GameObject dropletSpawner in purchaseInteractables)
+            {
+                //actually distance squared but i heard computers are faster not doing sqrt(), which makes sense
+                float distance = (position - dropletSpawner.transform.position).sqrMagnitude;
+
+                // Update the smallest distance if the current distance is smaller
+                if (distance < smallestDistance)
+                {
+                    smallestDistance = distance;
+                    smoll = dropletSpawner;
+                }
+            }
+
+            //its about close enough so 'Object', is probably the cause
+            if (smallestDistance <= 8f)
+            {
+                //alot of checks to find the character from the lastActivator of *the cause* (now moved to a helper method)
+                CharacterBody body = GetCharacterFromInteractionObject(smoll);
+                if (body != null)
+                {
+                    body.inventory.GiveItem(item);
+                    return;
+                }
+            }
+
+            //I think this check looks a bit wired, but its because i also want it to work even if a player suddendly leaves
+            if (currentPlayer >= PlayerCharacterMasterController.instances.Count)
+            {
+                currentPlayer = 0;
+            }
+            PlayerCharacterMasterController player = PlayerCharacterMasterController.instances[currentPlayer];
+            currentPlayer++;
+
+            player.body.inventory.GiveItem(item);
+        }
+
         private void ExtraBleed(On.RoR2.DotController.orig_AddDot orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
         {
             CharacterBody attacker = attackerObject.GetComponent<CharacterBody>();
@@ -872,6 +922,9 @@ namespace An_Rnd
 
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
+            //Extra Logic used when ItemDrops are prevented to determin things like scrap owner
+            RePopulateInteractList();
+
             //there is 'self.sceneDef.baseSceneName' but its seems to not be an instance for some reason, so i found this: 'SceneInfo.instance.sceneDef.baseSceneName'
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
@@ -925,6 +978,19 @@ namespace An_Rnd
 
             }
             return orig(self);
+        }
+
+        private void RePopulateInteractList()
+        {
+            purchaseInteractables.Clear();
+            GameObject[] allGameObjects = FindObjectsOfType<GameObject>();
+
+            //I hope this is at least as fast as having 1 foreach loop and 7 or(||) checks; i asked chatgpt for an alternative [a thing you should not do if you do not want to be 'scammed']
+            purchaseInteractables = allGameObjects
+            .Where(obj => requiredPatterns.Any(pattern => obj.name.Contains(pattern)))
+            .Select(obj => obj.transform.root.gameObject) // Get the root object
+            .Distinct() // Ensure uniqueness
+            .ToList();
         }
 
         private IEnumerator AddShrinesDelay(ArenaMissionController controller)
@@ -985,27 +1051,24 @@ namespace An_Rnd
 
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
-            //non-host check
-            if (!TeleporterInteraction.instance)
-            {
-                orig(self, pickupIndex);
-                return;
-            }
 
             int total;
             if (useShrine) total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
             else total = Math.Max((int)Math.Floor(DifficultyCounter * extraRewards), 1);
 
-            for (int i = 0; i < total; i++)
-            {
-                orig(self, pickupIndex);
-            }
+            CharacterBody player = GetCharacterFromInteractionObject(self.gameObject);
 
-            Log.Info($"Id For current Player controller?: {self.playerControllerId}");
-            
-            /*int count = PlayerCharacterMasterController.instances.Count;
-            PlayerCharacterMasterController player = PlayerCharacterMasterController.instances[self.playerControllerId];
-            Log.Info($"Player: {player.name} opened void Potential");*/
+            if (preventDrops && player)
+            {
+                player.inventory.GiveItem(pickupIndex.pickupDef.itemIndex, total);
+            }
+            else
+            {
+                for (int i = 0; i < total; i++)
+                {
+                    orig(self, pickupIndex); 
+                }
+            }
         }
 
         private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
@@ -1279,6 +1342,56 @@ namespace An_Rnd
                 GameObject portal = Instantiate(raidPortalPrefab, new Vector3(281.10f, -446.82f, -126.10f), new Quaternion(0.00000f, -0.73274f, 0.00000f, 0.68051f));
                 SyncObject(portal);
             }
+        }
+
+        private CharacterBody GetCharacterFromInteractionObject(GameObject Object)
+        {
+            //alot of checks to find the character from the lastActivator of *the cause*
+            PurchaseInteraction interaction = Object.GetComponent<PurchaseInteraction>();
+            ScrapperController scrapper = Object.GetComponent<ScrapperController>();
+
+            if (interaction != null || scrapper)
+            {
+                Interactor interactor;
+
+                if (interaction) interactor = interaction.lastActivator;
+                else interactor = scrapper.interactor;
+
+                if (interactor != null)
+                {
+                    CharacterMaster master = interactor.GetComponent<CharacterMaster>();
+                    if (master != null)
+                    {
+                        return master.playerCharacterMasterController.body;
+                    }
+                    else
+                    {
+                        //the Warning below was removed due to this situation happening alot; the null check is still there even if uneccessary just for the Log
+                        //Log.Warning($"Could not find CharacterMaster for interactor: {interactor.name}");
+                        CharacterBody controller = interactor.GetComponent<CharacterBody>();
+                        if (controller != null) return controller;
+                        else Log.Warning($"Could not find CharacterBody for: {interactor.name}");
+                    }
+                }
+                else Log.Warning($"Could not find interactor for interaction: {interaction.name}");
+            } //I should not have named them interactor and interaction, the names are too similar
+            else
+            {
+                //is probably OptionPickup (void potential)
+                //Log.Warning($"Could not find interaction for: {Object.name}");
+
+                NetworkUIPromptController uiController = Object.GetComponent<NetworkUIPromptController>();
+                if (uiController != null)
+                {
+                    CharacterMaster master = uiController.currentParticipantMaster;
+                    if (master != null)
+                    {
+                        return master.playerCharacterMasterController.body;
+                    }
+                    else Log.Warning($"Could not find CharacterMaster for: {uiController.name} (probably not OptionPickup?: {Object.name})");
+                }
+            }
+            return null;
         }
 
         [Server]
