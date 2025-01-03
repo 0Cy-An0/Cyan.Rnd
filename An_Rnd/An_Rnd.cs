@@ -121,7 +121,6 @@ namespace An_Rnd
             //check for if the option is enabled, this add is about a bleed stack and there is a attacker (i cant get the bleed chance otherwise)
             if (!enableBleed || DotController.DotIndex.Bleed != dotIndex || attacker == null)
             {
-                Log.Info($"no bleed: !{enableBleed}, {DotController.DotIndex.Bleed}!={dotIndex}, {attacker}");
                 orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
                 return;
             }
@@ -129,7 +128,6 @@ namespace An_Rnd
             int extraBleedStacks = (int)(attacker.bleedChance / 100f) - 1; //same as crit, no idea why store it as 100f = 100% and not 1f = 100%
             if (extraBleedStacks < 0) //no change if the bleed chance, is below 100%
             {
-                Log.Info($"no bleed: {extraBleedStacks}; {attacker.bleedChance}");
                 orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
                 return;
             }
@@ -143,7 +141,6 @@ namespace An_Rnd
                 {
                     extraBleedStacks += 1;
                 }
-                Log.Info($"extra Bleed {extraBleedStacks}");
             }
 
             orig(self, attackerObject, duration, dotIndex, damageMultiplier, maxStacksFromAttacker, totalDamage, preUpgradeDotIndex);
