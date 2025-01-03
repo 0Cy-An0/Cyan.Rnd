@@ -886,23 +886,8 @@ namespace An_Rnd
                     GameObject portal = Instantiate(teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
                     //btw i do not sync portal to client, which i had to do for the null portal, but its supposed to be inaccesible anyway, so that should be fine
 
-                    int total = numShrines;
-                    if (expScaling && total > 0) //i think it would add 1 shrine anyway if i do not check that its disabled here
-                    {
-                        if (TeleporterInteraction.instance.shrineBonusStacks == 0)
-                        {
-                            TeleporterInteraction.instance.AddShrineStack();
-                            total -= 1;
-                        }
-                        total = (int) (TeleporterInteraction.instance.shrineBonusStacks * Math.Pow(2.0, (double)total));
-                    }
-
-                    for (int i = 0; i < arenaCount * total; i++)
-                    {
-                        TeleporterInteraction.instance.AddShrineStack(); //So i am not 100% sure what else happens other than shrineBonusStacks += 1, but there are hooks and such, so i used a loop here
-                    }
-                    //adding the extra Credits from the config
-                    controller.baseMonsterCredit += extraMonsterCredits * TeleporterInteraction.instance.shrineBonusStacks;
+                    //Allow time for other mods to add shrines on stage start
+                    StartCoroutine(AddShrinesDelay(controller));
                 }
                 else //we do not need a portal now, and the shrines are replaces by DifficultyCounter
                 {
@@ -922,6 +907,27 @@ namespace An_Rnd
 
             }
             return orig(self);
+        }
+
+        private IEnumerator AddShrinesDelay(ArenaMissionController controller)
+        {
+            yield return new WaitForSeconds(0.1f);
+
+            int toAdd = numShrines;
+            if (expScaling && toAdd > 0) //i think it would add 1 shrine anyway if i do not check that its disabled here
+            {
+                toAdd = (int)(TeleporterInteraction.instance.shrineBonusStacks * Math.Pow(2.0, toAdd)) - TeleporterInteraction.instance.shrineBonusStacks;
+            }
+
+            for (int i = 0; i < arenaCount * toAdd; i++)
+            {
+                TeleporterInteraction.instance.AddShrineStack(); //So i am not 100% sure what else happens other than shrineBonusStacks += 1, but there are hooks and such, so i used a loop here
+            }
+            //adding the extra Credits from the config
+            Log.Info($"Base Credits before: {controller.baseMonsterCredit}");
+            controller.baseMonsterCredit += extraMonsterCredits * TeleporterInteraction.instance.shrineBonusStacks;
+            Log.Info($"Base Credits after: {controller.baseMonsterCredit}");
+
         }
 
         //just to note for future reference, using this caused some weird error. Maybe something else was going on at the time, but for now ill say it does not work
