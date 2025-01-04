@@ -101,6 +101,7 @@ namespace An_Rnd
             "Chest",      // should cover chest variations like Chest1, Chest2, GoldChest, CategoryChestUtility, etc.
             "Duplicator",
             "ShrineChance",
+            "Lockbox",
             "Cauldron"    // should cover all Cauldron variations
         ];
 
@@ -170,7 +171,8 @@ namespace An_Rnd
                                 object[] saveData = new object[]
                                 {
                                     latestInventoryItems,
-                                    arenaCount
+                                    arenaCount,
+                                    currentPlayer
                                 };
 
                                 // Add the array to the save data dictionary under the PluginGUID key
@@ -254,6 +256,7 @@ namespace An_Rnd
                                     }
 
                                     arenaCount = Convert.ToInt32(loadedData[1]);
+                                    currentPlayer = Convert.ToInt32(loadedData[2]);
                                     wasLoaded = true; //this is so that the loaded variables are not reset for 'a new run'
 
                                     Log.Info($"Loaded latestInventoryItems and arenaCount({arenaCount}) with ProperSave.");
@@ -375,7 +378,7 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("General", "Prevent ItemDrops", false, "If enabled, stops normal item creation and adds them to the players inventory directly\nIterates over all players if Multiplayer"),
+                    Config.Bind("General", "Prevent ItemDrops", false, "If enabled, stops normal item creation and adds them to the players inventory directly\nIterates over all players if Multiplayer\nyou can enable this temporary ingame inf neccesary\nWith this Option enabled you will not pickup any items(tough they will still be added to your inventory) so be aware that you may not notice as there are no pickup notifications and such\nThis may cause errors if there are other mods that try to do something to items while they spawn as this will set the spawn to 'null'"),
                     typeof(bool),
                     new Action<object>(value => preventDrops = (bool)value),
                     null,
@@ -764,16 +767,7 @@ namespace An_Rnd
             ItemIndex item = createPickupInfo.pickupIndex.pickupDef.itemIndex;
             if (preventDrops && item != ItemIndex.None)
             {
-                //I think this check looks a bit wired, but its because i also want it to work even if a player suddendly leaves
-                if (currentPlayer >= PlayerCharacterMasterController.instances.Count)
-                {
-                    currentPlayer = 0;
-                }
-                PlayerCharacterMasterController player = PlayerCharacterMasterController.instances[currentPlayer];
-                currentPlayer++;
-
-                player.body.inventory.GiveItem(item);
-
+                AddToPlayerInventory(item);
                 return null;
             }
             return orig(ref createPickupInfo);
@@ -809,24 +803,12 @@ namespace An_Rnd
             //its about close enough so 'Object', is probably the cause
             if (smallestDistance <= 8f)
             {
-                //alot of checks to find the character from the lastActivator of *the cause* (now moved to a helper method)
-                CharacterBody body = GetCharacterFromInteractionObject(smoll);
-                if (body != null)
-                {
-                    body.inventory.GiveItem(item);
-                    return;
-                }
+                int index = GetPlayerIndexFromInteractionObject(smoll);
+                AddToPlayerInventory(item, index);
+                return;
             }
 
-            //I think this check looks a bit wired, but its because i also want it to work even if a player suddendly leaves
-            if (currentPlayer >= PlayerCharacterMasterController.instances.Count)
-            {
-                currentPlayer = 0;
-            }
-            PlayerCharacterMasterController player = PlayerCharacterMasterController.instances[currentPlayer];
-            currentPlayer++;
-
-            player.body.inventory.GiveItem(item);
+            AddToPlayerInventory(item);
         }
 
         private void ExtraBleed(On.RoR2.DotController.orig_AddDot orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
@@ -1066,11 +1048,12 @@ namespace An_Rnd
             if (useShrine) total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
             else total = Math.Max((int)Math.Floor(DifficultyCounter * extraRewards), 1);
 
-            CharacterBody player = GetCharacterFromInteractionObject(self.gameObject);
+            
 
-            if (preventDrops && player)
+            if (preventDrops)
             {
-                player.inventory.GiveItem(pickupIndex.pickupDef.itemIndex, total);
+                int playerIndex = GetPlayerIndexFromInteractionObject(self.gameObject);
+                AddToPlayerInventory(pickupIndex.pickupDef.itemIndex, playerIndex, total);
             }
             else
             {
@@ -1367,9 +1350,10 @@ namespace An_Rnd
             }
         }
 
-        private CharacterBody GetCharacterFromInteractionObject(GameObject Object)
+        private int GetPlayerIndexFromInteractionObject(GameObject Object)
         {
-            //alot of checks to find the character from the lastActivator of *the cause*
+            //alot of checks to find the Index of the player from their interaction with the passed object
+            CharacterBody body = null;
             PurchaseInteraction interaction = Object.GetComponent<PurchaseInteraction>();
             ScrapperController scrapper = Object.GetComponent<ScrapperController>();
 
@@ -1383,21 +1367,19 @@ namespace An_Rnd
                 if (interactor != null)
                 {
                     CharacterMaster master = interactor.GetComponent<CharacterMaster>();
-                    if (master != null)
-                    {
-                        return master.playerCharacterMasterController.body;
-                    }
+                    if (master != null) body = master.playerCharacterMasterController.body;
                     else
                     {
                         //the Warning below was removed due to this situation happening alot; the null check is still there even if uneccessary just for the Log
                         //Log.Warning($"Could not find CharacterMaster for interactor: {interactor.name}");
+
                         CharacterBody controller = interactor.GetComponent<CharacterBody>();
-                        if (controller != null) return controller;
+                        if (controller != null) body = controller;
                         else Log.Warning($"Could not find CharacterBody for: {interactor.name}");
-                    }
-                }
+                    } 
+                }//I should not have named them interactor and interaction, the names are too similar
                 else Log.Warning($"Could not find interactor for interaction: {interaction.name}");
-            } //I should not have named them interactor and interaction, the names are too similar
+            } 
             else
             {
                 //is probably OptionPickup (void potential)
@@ -1407,14 +1389,55 @@ namespace An_Rnd
                 if (uiController != null)
                 {
                     CharacterMaster master = uiController.currentParticipantMaster;
-                    if (master != null)
-                    {
-                        return master.playerCharacterMasterController.body;
-                    }
+                    if (master != null) body = master.playerCharacterMasterController.body;
                     else Log.Warning($"Could not find CharacterMaster for: {uiController.name} (probably not OptionPickup?: {Object.name})");
                 }
             }
-            return null;
+
+            if (body != null)
+            {
+                //find index of controller
+                PlayerCharacterMasterController controller = body.master.playerCharacterMasterController;
+                int index = -1;
+                for (int i = 0; i < PlayerCharacterMasterController.instances.Count; i++)
+                {
+                    if (PlayerCharacterMasterController.instances[i] == controller)
+                    {
+                        return index;
+                    }
+                }
+                Log.Warning($"Could not find {controller} in PlayerCharacterMasterController.instances (body: {body}, master: {body.master})");
+            }
+            return -1;
+        }
+
+        private void AddToPlayerInventory(ItemIndex item, int target = -1, int total = 1)
+        {
+            if (target == -1)
+            {
+                if (currentPlayer >= NetworkUser.readOnlyInstancesList.Count)
+                {
+                    currentPlayer = 0;
+                }
+                target = currentPlayer;
+            }
+
+            if (target >= NetworkUser.readOnlyInstancesList.Count)
+            {
+                Log.Error($"tried to target invalid position in Connected Users Pos: {target} with CollectionSize: {NetworkUser.readOnlyInstancesList.Count}");
+                return;
+            }
+
+            Log.Info($"Trying to access user index: {target} (CurrentSize: {NetworkUser.readOnlyInstancesList.Count})");
+            NetworkUser user = NetworkUser.readOnlyInstancesList[target];
+            CharacterMaster master = user.master;
+            if (master == null)
+            {
+                Log.Error($"Could not find Master for '{user}' thus loosing item {item}");
+                return;
+            }
+            master.inventory.GiveItem(item, total);
+            currentPlayer++;
         }
 
         [Server]
