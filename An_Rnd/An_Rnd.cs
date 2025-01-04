@@ -51,6 +51,8 @@ namespace An_Rnd
         public static float extraItems = 0f;
         //How many items are spawned after picking per active mountain shrine (Rounded down, because i can't spawn fractions of items)
         public static float extraRewards = 0f;
+        //float to increase the Stage after a finished void cell by (scaled with difficulty option) [check the tied option if this explanation is unclear]
+        public static float stageIncrease = 0f;
         //will be multiplied to the base radius of the void cells
         public static float voidRadius = 1f;
         //skip unmodifed void fields boolean
@@ -117,6 +119,7 @@ namespace An_Rnd
             On.RoR2.ArenaMissionController.AddItemStack += MultiplyEnemyItem;
             On.RoR2.ArenaMissionController.AddMonsterType += MultiplyEnemyType;
             On.RoR2.ArenaMissionController.BeginRound += ActivateCell;
+            On.RoR2.ArenaMissionController.EndRound += FinishCell;
             On.RoR2.HoldoutZoneController.Update += ZoneCharge;
             On.RoR2.GenericPickupController.CreatePickup += AddItemDirectly;
             On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 += AddDropletDirectly;
@@ -400,14 +403,14 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("Void Fields", "Use Shrines", false, "If enabled, will spawn a unusable teleporter in the void fields to activate mountainShrines instead of just an internal counter\nThis Option will probably do nothing if you do not have other mods that interact with mountain shrines, i reccomend looking for one that makes them persist over the whole run after activiating"),
+                    Config.Bind("Void Fields", "Use Shrines", false, "If enabled, will spawn a unusable teleporter in the void fields to activate mountainShrines instead of just an internal counter\nAny use of the difficulty counter is replaced by the current active mountain Shrines\nThis Option will probably do nothing if you do not have other mods that interact with mountain shrines, i reccomend looking for one that makes them persist over the whole run after activiating"),
                     typeof(bool),
                     new Action<object>(value => useShrine = (bool)value),
                     null,
                     null
                 ),
                 (
-                    Config.Bind("Void Fields", "Number of Shrines", 5, "Number of shrines activated per additional void field entry\n with unmodded first entry it goes 0,num,2xnum,3xnum,..."),
+                    Config.Bind("Void Fields", "Difficulty Scaling", 5, "Number the Internal void field difficulty counter is set to per additional void field entry\n with otherwise unmodded entrys it goes 0,num,2xnum,3xnum,..."),
                     typeof(int),
                     new Action<object>(value => numShrines = (int)value),
                     0,
@@ -421,14 +424,14 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("Void Fields", "exponential Scaling", false, "If enabled, will use the above Number of Shrines to *2 instead of just adding\nfor example 4 for shrines would add 1 if 0 are active and then do *2,*2,*2 for a total of 8"),
+                    Config.Bind("Void Fields", "exponential Scaling", false, "If enabled, will use 'Difficulty Scaling' to *2 instead of just adding\nfor example if the difficulty were normally set to 4 this would make it add 1 and then do *2,*2,*2 for a total of 8 (adding 1 first so that its not 0*2)"),
                     typeof(bool),
                     new Action<object>(value => expScaling = (bool)value),
                     null,
                     null
                 ),
                 (
-                    Config.Bind("Void Fields", "Stage Counter Cap", 0, "Sets a cap for the Stage Counter, which is what 'Number of Shrines' is multiplied by\n0 for disabled\nThis only effects what is added if you, for example, use shrines and have a persistent shrine mod they will still be uncapped and will just always scale by the current settings *Cap at most"),
+                    Config.Bind("Void Fields", "Stage Counter Cap", 0, "Sets a cap for the Stage Counter, which is what 'Difficulty Scaling' is multiplied by for each entry\n0 for disabled\nExample with a cap of 2 and a scaling of 3 would be 0*3=0, 1*3=3, 2*3=6, 2*3=6, ...\nThis only effects what is added if you, for example, use shrines and have a persistent shrine mod they will still be uncapped and will just always scale by the current settings *Cap at most"),
                     typeof(int),
                     new Action<object>(value => arenaCap = (int)value),
                     0,
@@ -442,7 +445,7 @@ namespace An_Rnd
                     1000
                 ),
                 (
-                    Config.Bind("Void Fields", "Enemy Extra ItemStacks Threshold", 0, "Number of mountain shrines required to increase 'Enemy Extra ItemStacks' by 1.\n0 for disabled"),
+                    Config.Bind("Void Fields", "Enemy Extra ItemStacks Threshold", 0, "Difficulty Count required to increase 'Enemy Extra ItemStacks' by 1\nExample if Set to 100 and the Counter is at 225, it will use your ItemStacks setting +2\n0 for disabled"),
                     typeof(int),
                     new Action<object>(value => extraStacksThreshold = (int)value),
                     0,
@@ -456,7 +459,7 @@ namespace An_Rnd
                     1000
                 ),
                 (
-                    Config.Bind("Void Fields", "Monsters Threshold", 0, "Number of mountain shrines required to increase 'Monsters' by 1.\n0 for disabled"),
+                    Config.Bind("Void Fields", "Monsters Threshold", 0, "Difficulty Count required to increase 'Monsters' by 1\nExample if Set to 20 and the Counter is at 60, it will use your Monster Setting +3\n0 for disabled"),
                     typeof(int),
                     new Action<object>(value => extraMonsterTypesThreshold = (int)value),
                     0,
@@ -470,25 +473,32 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("Void Fields", "Extra Credits", 0f, "How many extra credits are given to the void fields per active mountain shrine\n0 for disabled[i mean you add 0, so...]\nI am not 100% sure but unused RoR2 may move unused credits to the next stage combat director"),
+                    Config.Bind("Void Fields", "Extra Credits", 0f, "How many extra credits are given to the void fields per Difficulty Counter\n0 for disabled[i mean you add 0, so...]\nI am not 100% sure but RoR2 may move unused credits to the next stage combat director, so be aware"),
                     typeof(float),
                     new Action<object>(value => extraMonsterCredits = (float)value),
                     0f,
                     10000f
                 ),
                 (
-                    Config.Bind("Void Fields", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per active shrine.\n0 for disable"),
+                    Config.Bind("Void Fields", "Enemy Extra Items", 1f, "Multiplier for void field enemy items per Difficulty Count.\n0 for disable"),
                     typeof(float),
                     new Action<object>(value => extraItems = (float)value),
                     0f,
                     10000f
                 ),
                 (
-                    Config.Bind("Void Fields", "Reward Item Multiplier per Shrine", 1f, "Multiplier for void field rewards per active shrine.\n0 for disable"),
+                    Config.Bind("Void Fields", "Reward Item Multiplier", 1f, "Multiplier for void field rewards per Difficulty Count.\n0 for disable"),
                     typeof(float),
                     new Action<object>(value => extraRewards = (float)value),
                     0f,
                     10000f
+                ),
+                (
+                    Config.Bind("Void Fields", "Increase Stage Counter after Cell Finish", 0f, "This value will be multiplied by the difficulty counter and Increase the Stage after each cell by that amount\nAs only whole numbers are allowed it will use the floor so it could be 0 for the first few times if the difficulty and this setting is low enough\n0 for disable"),
+                    typeof(float),
+                    new Action<object>(value => stageIncrease = (float)value),
+                    0f,
+                    10f
                 ),
                 (
                     Config.Bind("Void Fields", "Void Cell Radius", 1f, "Multiplies the base radius with the given number"),
@@ -504,7 +514,7 @@ namespace An_Rnd
                     0.0001f,
                     1000f
                 ),
-                ( //i wanted to add these via a loop but that caused some wierd error with RiskOfOptions... [I replaced this with an array at a later point, because of such things it seemed more fitting]
+                ( //i wanted to add these via a loop but that caused some wierd error with RiskOfOptions... [I replaced this with an array at a later point; it seemed more fitting because of such things too]
                     Config.Bind("Void Fields", "Void Cell 1 start Charge", 0f, "The void cell starts at the given percentage for Cell 1"),
                     typeof(float),
                     new Action<object>(value => startCharges[0] = (float)value),
@@ -1086,6 +1096,19 @@ namespace An_Rnd
             cell.baseRadius *= voidRadius;
             cell.baseChargeDuration *= chargeDurationMult;
             cell.charge = startCharges[currentCell];
+        }
+
+        private void FinishCell(On.RoR2.ArenaMissionController.orig_EndRound orig, ArenaMissionController self)
+        {
+            if (stageIncrease > 0)
+            {
+                int diffCounter;
+                if (useShrine) diffCounter = TeleporterInteraction.instance.shrineBonusStacks;
+                else diffCounter = DifficultyCounter;
+                Run.instance.stageClearCount += (int)Math.Floor(stageIncrease * diffCounter);
+            }
+
+            orig(self);
         }
 
         private void MultiplyEnemyItem(On.RoR2.ArenaMissionController.orig_AddItemStack orig, ArenaMissionController self)

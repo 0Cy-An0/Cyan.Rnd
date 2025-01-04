@@ -9,10 +9,8 @@ Does Random stuff I wanted to have in the game:
     - Monster inherit Items from previous Void Field stages
     - extra Void Field stages increase item drops and monster items
         - all things listed below are further configurable via the config (or RiskOfOptions)
-        - Difficulty Setting to influence item scaling (both enemy and reward)
-        - reward items can still only be selected once per player but will drop multiplied after selection
-            - Additional Items might fall of the edge. This is Intended. (in so far that i can't be bother to make it so that the items don't explode)
-    - there is a option to get more monsters instead of just 1 type added (also blacklist)
+        - Difficulty Setting to influence item scaling
+    - there is a option to get more monsters instead of just 1 type added
     - various speed and cell percentage Settings
     - check the options or Config for a more detailed list that may include options not listed here
 
@@ -21,11 +19,9 @@ Does Random stuff I wanted to have in the game:
 
 
 Currently just ideas:
-
 - void field stuff
     - add monsters from spawn (card?) pool
     - option to get all three items via round robin?
-    - option to increase stage after leaving depening on current difficulty scaling
 
 bugs/untested:
 - artifact of evolution
