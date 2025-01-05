@@ -5,16 +5,19 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using BepInEx.Configuration;
-using System.Reflection;
 using System.Collections.Generic;
-using ProperSave.Data;
 using System.Linq;
 using UnityEngine.Networking;
+using BepInEx.Bootstrap;
+using ProperSave;
+using RiskOfOptions;
 
 namespace An_Rnd
 {
     //RoR2API stuff
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
+    [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("com.KingEnderBrine.ProperSave", BepInDependency.DependencyFlags.SoftDependency)]
 
     public class An_Rnd : BaseUnityPlugin
     {
@@ -111,9 +114,8 @@ namespace An_Rnd
             // Init our logging class so that we can properly log for debugging
             Log.Init(Logger);
             InitPortalPrefab();
-            //I think there is like softDependcy or stuff with BepInEx... I did it in a worse way but it works so thats fine
-            TryInitRiskOfOptions();
-            TryInitProperSave();
+            //loads(creates) config file and tries to load anything marked with SoftDependency
+            ConfigandTrySoft();
 
             On.RoR2.BazaarController.OnStartServer += CheckNullPortal;
             On.RoR2.PickupPickerController.CreatePickup_PickupIndex += MultiplyItemReward;
@@ -140,202 +142,84 @@ namespace An_Rnd
             teleporterPrefab = Addressables.LoadAssetAsync<GameObject>("RoR2/Base/Teleporters/Teleporter1.prefab").WaitForCompletion();
         }
 
-        private void TryInitProperSave()
+        private void ConfigandTrySoft()
         {
-            try
+            //i could have just done var configEntries, but isn't it fun how long this is? Check comments of CreateLoadConfig if you want to know why (more like what, why is more because use in the end loop(in CreateLoad) and in RiskOfOptions)
+            (ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar, object min, object max)[] configEntries = CreateLoadConfig();
+
+            if (Chainloader.PluginInfos.ContainsKey("com.rune580.riskofoptions")) InitRiskOfOptions(configEntries);
+            else Log.Warning("RiskOfOptions is not available"); //could probably make this a .Info, but i think i like this better
+            
+            if (Chainloader.PluginInfos.ContainsKey("com.KingEnderBrine.ProperSave")) InitProperSave();
+            else Log.Warning("ProperSave is not available.");
+        }
+        
+        private void InitProperSave()
+        {
+            SaveFile.OnGatherSaveData += SaveToProperSave;
+            Loading.OnLoadingStarted += LoadFromProperSave;
+
+            void SaveToProperSave(Dictionary<String, object> dictionary)
             {
-                // Get the ProperSave SaveFile type dynamically
-                Type properSaveType = Type.GetType("ProperSave.SaveFile, ProperSave");
-                if (properSaveType == null)
+                // Create a combined array. ProperSave readme said to best to only save on thing (/combined thing)
+                object[] saveData = new object[]
                 {
-                    Log.Warning("ProperSave is not available.");
+                    latestInventoryItems,
+                    arenaCount,
+                    currentPlayer
+                };
+                //there was some error when i used my GUID, either i made a mistake or it was the '.' so I removed it
+                dictionary["CyanRnd"] = saveData;
+                Log.Info("Save data successfully added to ProperSave.");
+            }
+
+            void LoadFromProperSave(SaveFile file)
+            {
+                if(!file.ModdedData.TryGetValue("CyanRnd", out ProperSave.Data.ModdedData savedData))
+                {
+                    Log.Warning("Could not find SaveData");
                     return;
                 }
-
-                Type loadingType = Type.GetType("ProperSave.Loading, ProperSave");
-
-                // Hook into OnGatherSaveData event dynamically
-                EventInfo onGatherSaveDataEvent = properSaveType.GetEvent("OnGatherSaveData");
-                if (onGatherSaveDataEvent != null)
+                if (savedData.Value is object[] loadedData && loadedData.Length == 3)
                 {
-                    Action<object> gatherSaveDataHandler = (sender) =>
+                    //So apperently ProperSaves loads saved int[] as object (which i kinda had to figure out via Consol Logs, because i am stupid) so here is a conversion, that i defintily came up with my self and did not ask chatGpt for
+                    try
                     {
-                        try
-                        {
-                            Log.Info("ProperSave is gathering save data.");
-
-                            // Create a combined array. ProperSave readme said to best save as one
-                            if (sender is IDictionary<string, object> saveDataDictionary)
-                            {
-                                // Create a combined array for saving data
-                                object[] saveData = new object[]
-                                {
-                                    latestInventoryItems,
-                                    arenaCount,
-                                    currentPlayer
-                                };
-
-                                // Add the array to the save data dictionary under the PluginGUID key
-                                saveDataDictionary["Cyan"] = saveData;
-
-                                Log.Info("Save data successfully added to ProperSave.");
-                            }
-                            else
-                            {
-                                Log.Error("Could not save data because sender is not expected type");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error($"Error while trying to save data with ProperSave: {ex.Message}\\n{ex.StackTrace}");
-                        }
-                    };
-
-                    Delegate gatherSaveDataDelegate = Delegate.CreateDelegate(onGatherSaveDataEvent.EventHandlerType, gatherSaveDataHandler.Target, gatherSaveDataHandler.Method);
-                    onGatherSaveDataEvent.AddEventHandler(null, gatherSaveDataDelegate);
-                }
-                else
-                {
-                    Log.Error("Failed to hook into ProperSave.OnGatherSaveData.");
-                }
-
-                // Hook into Loading.OnLoadingStarted event dynamically
-                EventInfo OnLoadingStartedEvent = loadingType.GetEvent("OnLoadingStarted");
-                if (OnLoadingStartedEvent != null)
-                {
-                    Action<object> loadingStartedHandler = (saveFile) =>
+                        // Casts loadedData[0](object) to List<object> and converts this to int[](by casting it to List<int> and then converting to array._.) because of course i can't just cast to (int[])
+                        latestInventoryItems = ((List<object>)loadedData[0]).Cast<int>().ToArray();
+                    }
+                    catch (Exception ex)
                     {
-                        //I had i weird error with the saveFile so i am adding a bunch of checks which will probably stay
-                        if (saveFile == null)
-                        {
-                            Log.Error("saveFile is null.");
-                            return;
-                        }
-
-                        try
-                        {
-
-                            var saveDataProperty = saveFile.GetType().GetProperty("ModdedData");
-                            if (saveDataProperty == null)
-                            {
-                                Log.Error("ModdedData property not found on saveFile.");
-                                return;
-                            }
-                            var moddedDataDictionary = saveDataProperty.GetValue(saveFile) as IDictionary<string, ModdedData>;
-                            if (moddedDataDictionary == null)
-                            {
-                                Log.Error("ModdedData dictionary is null.");
-                                return;
-                            }
-
-                            // Retrieve saved data
-                            if (moddedDataDictionary.TryGetValue("Cyan", out ModdedData savedData))
-                            {
-                                if (savedData.Value is object[] loadedData && loadedData.Length == 2)
-                                {
-                                    //So apperently ProperSaves loads saved int[] as List<object> (which i kinda had to figure out via Consol Logs, would have probably been more obvious were I to use a more normal method of using ProperSave) so here is a conversion, that i defintily came up with my self and did not ask chatGpt for
-                                    if (loadedData[0] is List<object> objList)
-                                    {
-                                        try
-                                        {
-                                            // Converts List<object> to int[]
-                                            latestInventoryItems = objList.Select(e => Convert.ToInt32(e)).ToArray();
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Log.Error($"Failed to convert List<object> to int[]. Exception: {ex.Message}");
-                                            foreach (var item in objList)
-                                            {
-                                                Log.Error($"    Item: {item}, Type: {item?.GetType()}");
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Log.Error($"Could not load latestInventoryItems, because it was not saved as List<object>. {loadedData[0].GetType()} instead");
-                                    }
-
-                                    arenaCount = Convert.ToInt32(loadedData[1]);
-                                    currentPlayer = Convert.ToInt32(loadedData[2]);
-                                    wasLoaded = true; //this is so that the loaded variables are not reset for 'a new run'
-
-                                    Log.Info($"Loaded latestInventoryItems and arenaCount({arenaCount}) with ProperSave.");
-                                }
-                                else
-                                {
-                                    Log.Error("Saved data format is invalid or unexpected.");
-                                }
-                            }
-                            else
-                            {
-                                Log.Warning($"No save data found for Cyan.");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error($"Error while loading save data: {ex.Message}\\n{ex.StackTrace}");
-                        }
-                    };
-
-                    Delegate loadingStartedDelegate = Delegate.CreateDelegate(OnLoadingStartedEvent.EventHandlerType, loadingStartedHandler.Target, loadingStartedHandler.Method);
-                    OnLoadingStartedEvent.AddEventHandler(null, loadingStartedDelegate);
-                }
-                else
-                {
-                    Log.Error("Failed to hook into ProperSave.Loading.OnLoadingEnded.");
-                }
-
-                Log.Info("ProperSave integration successfully.");
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"An error occurred while initializing ProperSave: {ex.Message}\n{ex.StackTrace}");
-            }
-        }
-
-        private void TryInitRiskOfOptions()
-        {
-            var configEntries = CreateLoadConfig();
-
-            try
-            {
-                // Check if RiskOfOptions is available
-                Type modSettingsManagerType = Type.GetType("RiskOfOptions.ModSettingsManager, RiskOfOptions");
-                if (modSettingsManagerType != null)
-                {
-                    // Dynamically create configurations and options
-                    foreach (var (config, varType, _, min, max) in configEntries)
-                    {
-                        object option = CreateOption(config, varType, min, max); //vodoo method to create the option like RiskOfOptions expects it, with it's typing; i say vodoo because i do not feel very confidend in this and got a bit of a short 1hour lesson from ChatGpt that did not help me at all
-                        if (option != null)
-                        {
-                            MethodInfo addOptionMethod = modSettingsManagerType.GetMethod(
-                                "AddOption",
-                                BindingFlags.Public | BindingFlags.Static,
-                                null,
-                                new[] { option.GetType().BaseType },
-                                null
-                            );
-                            addOptionMethod?.Invoke(null, new[] { option }); //Invokes as in this calls the method of RiskOfOptions that then lists my option and stuff
-                        }
+                        Log.Error($"Failed to Load save Data because: \"Failure to convert object to int[]. Exception: {ex.Message}\"");
                     }
 
-                    Log.Info("RiskOfOptions integration successful.");
+                    arenaCount = Convert.ToInt32(loadedData[1]);
+                    currentPlayer = Convert.ToInt32(loadedData[2]);
+                    wasLoaded = true; //this is so that the loaded variables are not reset for 'a new run'
+
+                    Log.Info($"Loaded latestInventoryItems, arenaCount({arenaCount}) and currentPlayer({currentPlayer}) with ProperSave.");
                 }
                 else
                 {
-                    Log.Warning("RiskOfOptions is not available. Falling back to default behavior.");
+                    Log.Error("Saved data format is invalid or unexpected.");
                 }
             }
-            catch (Exception ex)
+
+            Log.Info("ProperSave setup successful");
+        }
+
+        private void InitRiskOfOptions((ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar, object min, object max)[]  configEntries)
+        {
+
+            foreach (var (config, varType, _, min, max) in configEntries)
             {
-                Log.Error($"Failed to integrate RiskOfOptions: {ex.Message}");
+                AddOption(config, varType, min, max);
             }
 
-            // Hook setting changes dynamically
+            //Hook setting changes; Updates the given Variable if the Option was changed via RiskOfOptions
             foreach (var (config, StaticType, updateStaticVar, _, _) in configEntries)
             {
-                // Cast to the specific type of ConfigEntry<T> dynamically
+                // Cast to the specific type of ConfigEntry<T>
                 if (StaticType == typeof(int))
                 {
                     ConfigEntry<int> castConfig = (ConfigEntry<int>)config;
@@ -361,6 +245,8 @@ namespace An_Rnd
                     Log.Error($"Could not get type {StaticType} to hook SettingChanged for {config.Definition.Key}");
                 }
             }
+
+            Log.Info("RiskOfOptions setup successful.");
         }
 
         //this does what it says creates the config and loads values that may already be there and different from the default ones; returns all options in an array [should only be called once]
@@ -685,73 +571,48 @@ namespace An_Rnd
             return configEntries;
         }
 
-        private object CreateOption(ConfigEntryBase config, Type varType, object min, object max)
+        //Adds RiskOfOptions Option
+        private void AddOption(ConfigEntryBase config, Type varType, object min, object max)
         {
-            try
+            //make sure the config that is beeing used here is used with the correct typing
+            if (varType == typeof(int))
             {
-                //make sure the config that is beeing used here is used with the correct typing. This is what prepares the options for RiskOfOptions, but its treated as if it may not even exist so that i can compile without, which is why it may look a bit wired
-                if (varType == typeof(int))
+                RiskOfOptions.OptionConfigs.IntSliderConfig intConfig = new()
                 {
-                    Type baseOptionType = Type.GetType("RiskOfOptions.Options.IntSliderOption, RiskOfOptions");
-                    Type configType = Type.GetType("RiskOfOptions.OptionConfigs.IntSliderConfig, RiskOfOptions");
-                    object configInstance = Activator.CreateInstance(configType);
-                    configType.GetField("min")?.SetValue(configInstance, (int)min);
-                    configType.GetField("max")?.SetValue(configInstance, (int)max);
-                    Log.Info($"Added RiskOfOption '{config.Definition.Key}' as IntSlider");
-                    return Activator.CreateInstance(baseOptionType, config, configInstance);
-                }
-                else if (varType == typeof(float))
-                {
-                    Type baseOptionType = Type.GetType("RiskOfOptions.Options.FloatFieldOption, RiskOfOptions");
-                    Type configType = Type.GetType("RiskOfOptions.OptionConfigs.FloatFieldConfig, RiskOfOptions");
-                    object configInstance = Activator.CreateInstance(configType);
-                    // Use GetProperty to modify Min and Max properties; apparently FloatField uses Properties and not just public fields like intSlider, idk why
-                    var minProperty = configType.GetProperty("Min");
-                    var maxProperty = configType.GetProperty("Max");
-                    if (minProperty != null && minProperty.CanWrite)
-                    {
-                        minProperty.SetValue(configInstance, min);
-                    }
-                    else
-                    {
-                        Log.Warning($"Unable to set Min property for {config.Definition.Key}");
-                    }
-
-                    if (maxProperty != null && maxProperty.CanWrite)
-                    {
-                        maxProperty.SetValue(configInstance, max);
-                    }
-                    else
-                    {
-                        Log.Warning($"Unable to set Max property for {config.Definition.Key}");
-                    }
-
-                    Log.Info($"Added RiskOfOption '{config.Definition.Key}' as FloatField");
-                    return Activator.CreateInstance(baseOptionType, config, configInstance);
-                }
-                else if (varType == typeof(bool))
-                {
-                    Type baseOptionType = Type.GetType("RiskOfOptions.Options.CheckBoxOption, RiskOfOptions");
-                    Log.Info($"Added RiskOfOption '{config.Definition.Key}' as CheckBox");
-                    return Activator.CreateInstance(baseOptionType, config);
-                }
-                else if (varType == typeof(String))
-                {
-                    Type baseOptionType = Type.GetType("RiskOfOptions.Options.StringInputFieldOption, RiskOfOptions");
-
-                    Log.Info($"Added RiskOfOption '{config.Definition.Key}' as StringInputField");
-                    return Activator.CreateInstance(baseOptionType, config);
-                }
-                else
-                {
-                    Log.Error($"Failed to create option for {config.Definition.Key} because type was {varType}");
-                    return null;
-                }
+                    min = (int)min,
+                    max = (int)max,
+                };
+                RiskOfOptions.Options.IntSliderOption option = new((ConfigEntry<int>)config, intConfig);
+                ModSettingsManager.AddOption(option);
+                Log.Info($"Added RiskOfOption '{config.Definition.Key}' as IntSlider");
             }
-            catch (Exception ex)
+            else if (varType == typeof(float))
             {
-                Log.Error($"Failed to create option for {config.Definition.Key}: {ex.Message}");
-                return null;
+                RiskOfOptions.OptionConfigs.FloatFieldConfig floatConfig = new()
+                {
+                    //why are these capitalized?
+                    Min = (float)min,
+                    Max = (float)max,
+                };
+                RiskOfOptions.Options.FloatFieldOption option = new((ConfigEntry<float>)config, floatConfig);
+                ModSettingsManager.AddOption(option);
+                Log.Info($"Added RiskOfOption '{config.Definition.Key}' as FloatField");
+            }
+            else if (varType == typeof(bool))
+            {
+                RiskOfOptions.Options.CheckBoxOption option = new((ConfigEntry<bool>)config);
+                ModSettingsManager.AddOption(option);
+                Log.Info($"Added RiskOfOption '{config.Definition.Key}' as CheckBox");
+            }
+            else if (varType == typeof(String))
+            {
+                RiskOfOptions.Options.StringInputFieldOption option = new((ConfigEntry<string>)config);
+                ModSettingsManager.AddOption(option);
+                Log.Info($"Added RiskOfOption '{config.Definition.Key}' as StringInputField");
+            }
+            else
+            {
+                Log.Error($"Failed to create option for {config.Definition.Key} because type was {varType}");
             }
         }
 
