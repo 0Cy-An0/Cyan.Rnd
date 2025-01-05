@@ -264,7 +264,7 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("General", "Prevent ItemDrops", false, "If enabled, stops normal item creation and adds them to the players inventory directly\nIterates over all players if Multiplayer\nyou can enable this temporary ingame inf neccesary\nWith this Option enabled you will not pickup any items(tough they will still be added to your inventory) so be aware that you may not notice as there are no pickup notifications and such\nThis may cause errors if there are other mods that try to do something to items while they spawn as this will set the spawn to 'null'"),
+                    Config.Bind("General", "Prevent ItemDrops", false, "If enabled, stops normal item creation and adds them to the players inventory directly\nIterates over all players if Multiplayer\nyou can enable this temporary ingame if neccesary\nWith this Option enabled you will not pickup any items(tough they will still be added to your inventory), I had to specifically add PickupNotifications, i may have forogt something if you notice any issue, please notify me(i am not sure were at the point of writing this but if the mod is public some time in the future you can definitly reach me somehow)\nThis may cause errors if there are other mods that try to do something to items while they spawn as this will set the spawn to 'null'"),
                     typeof(bool),
                     new Action<object>(value => preventDrops = (bool)value),
                     null,
@@ -1298,6 +1298,7 @@ namespace An_Rnd
                 return;
             }
             master.inventory.GiveItem(item, total);
+            CharacterMasterNotificationQueue.PushItemNotification(master, item);
             currentPlayer++;
         }
 
