@@ -95,11 +95,11 @@ namespace An_Rnd
         //should be what exactly what the name says. Check method 'RemoveMatchingMonsterCards' for specific use
         public static String monsterBlacklist = "";
         //Will update on Stage start to contain all Printers, Scrappers, Cauldrons and the portal. Used to determin which gameobject spawned a given droplet
-        public static List<GameObject> purchaseInteractables = new List<GameObject>(); //do not ask me why the component thingy, which the list is named after, is named PurchaseInteraction if its used for things that cost something and things without
+        public static List<GameObject> purchaseInteractables = new List<GameObject>(); //do not ask me why the component thingy, which the list is named after, is named PurchaseInteraction if its used for things that cost something and things without (actually i might be stupid, i think it counts if you use money OR an item; Scrapper needed to be handled seperatly anyway)
         //look at the trees (names); patterns to find stuff for the list above
         public static string[] requiredPatterns =
         [
-            "TripleShop",
+            "Shop",
             "Scrapper",
             "Chest",      // should cover chest variations like Chest1, Chest2, GoldChest, CategoryChestUtility, etc.
             "Duplicator",
@@ -107,6 +107,7 @@ namespace An_Rnd
             "Lockbox",
             "Cauldron"    // should cover all Cauldron variations
         ];
+        public static short networkId = 4379;
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -131,6 +132,7 @@ namespace An_Rnd
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
+            NetworkUser.onPostNetworkUserStart += TryRegisterNetwork;
         }
 
         private void InitPortalPrefab()
@@ -662,7 +664,7 @@ namespace An_Rnd
             }
 
             //its about close enough so 'Object', is probably the cause
-            if (smallestDistance <= 8f)
+            if (smallestDistance <= 21f) //i tried 8 before but both ChanceShrine(18.+) and triple shop(20.+) were to faar away
             {
                 int index = GetPlayerIndexFromInteractionObject(smoll);
                 AddToPlayerInventory(item, index);
@@ -776,7 +778,7 @@ namespace An_Rnd
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
             //Extra Logic used when ItemDrops are prevented to determin things like scrap owner
-            RePopulateInteractList();
+            StartCoroutine(RePopulateInteractList()); //i am a bit unclear with the wait a second thing I do here with c#/unity; it says startCoroutine does that mean a new thread? because i do not believe i do anything threadsafe at all, i could look it up or just write this here and ignore it if until it becomes a problem
 
             //there is 'self.sceneDef.baseSceneName' but its seems to not be an instance for some reason, so i found this: 'SceneInfo.instance.sceneDef.baseSceneName'
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
@@ -833,16 +835,17 @@ namespace An_Rnd
             return orig(self);
         }
 
-        private void RePopulateInteractList()
+        private IEnumerator RePopulateInteractList()
         {
+            //waiting because for example TripleShopController spawns the PurchaseInteraction thingys later, i assume 1 frame but waiting a bit anyway
+            yield return new WaitForSeconds(0.1f);
             purchaseInteractables.Clear();
             GameObject[] allGameObjects = FindObjectsOfType<GameObject>();
 
-            //I hope this is at least as fast as having 1 foreach loop and 7 or(||) checks; i asked chatgpt for an alternative [a thing you should not do if you do not want to be 'scammed']
+            //trying to get the objects that spawn items and hold who interacted with them which was more complicated before i had the very smart idea to directly check the relevant component
             purchaseInteractables = allGameObjects
-            .Where(obj => requiredPatterns.Any(pattern => obj.name.Contains(pattern)))
-            .Select(obj => obj.transform.root.gameObject) // Get the root object
-            .Distinct() // Ensure uniqueness
+            .Where(obj => obj.GetComponent<PurchaseInteraction>() != null || obj.GetComponent<ScrapperController>() != null)
+            .Distinct()
             .ToList();
         }
 
@@ -1259,12 +1262,11 @@ namespace An_Rnd
             {
                 //find index of controller
                 PlayerCharacterMasterController controller = body.master.playerCharacterMasterController;
-                int index = -1;
                 for (int i = 0; i < PlayerCharacterMasterController.instances.Count; i++)
                 {
                     if (PlayerCharacterMasterController.instances[i] == controller)
                     {
-                        return index;
+                        return i;
                     }
                 }
                 Log.Warning($"Could not find {controller} in PlayerCharacterMasterController.instances (body: {body}, master: {body.master})");
@@ -1272,6 +1274,7 @@ namespace An_Rnd
             return -1;
         }
 
+        [Server]
         private void AddToPlayerInventory(ItemIndex item, int target = -1, int total = 1)
         {
             if (target == -1)
@@ -1289,17 +1292,50 @@ namespace An_Rnd
                 return;
             }
 
-            Log.Info($"Trying to access user index: {target} (CurrentSize: {NetworkUser.readOnlyInstancesList.Count})");
             NetworkUser user = NetworkUser.readOnlyInstancesList[target];
             CharacterMaster master = user.master;
+            An_Network networkItem = new(item); //this is some network vodoo in my opinion
+
             if (master == null)
             {
-                Log.Error($"Could not find Master for '{user}' thus loosing item {item}");
+                Log.Error($"Could not find Master for '{user}' default sending {item} to host");
+
+                NetworkServer.SendToClient(0, networkId, networkItem);
                 return;
             }
+
             master.inventory.GiveItem(item, total);
-            CharacterMasterNotificationQueue.PushItemNotification(master, item);
+
+            NetworkServer.SendToClient(target, networkId, networkItem);
             currentPlayer++;
+        }
+
+        private void TryRegisterNetwork(NetworkUser networkUser)
+        {
+            var client = NetworkManager.singleton?.client;
+
+            if (client == null || client.handlers == null ||client.handlers.ContainsKey(networkId))
+            {
+                Log.Warning($"could not register NetworkId {networkId}, because either client is null ({client == null}) or it is already registerd");
+                return;
+            }
+
+            client.RegisterHandler(networkId, RecieveItem);
+            Log.Info($"Registerd NetworkId {networkId}");
+        }
+
+        //this should happen when a item is send over the network via my mod which is then queued as a pickupnotification for the reciever
+        private static void RecieveItem(NetworkMessage networkMessage)
+        {
+            var item = networkMessage.ReadMessage<An_Network>().Item;
+            var localPlayer = PlayerCharacterMasterController.instances.FirstOrDefault(x => x.networkUser.isLocalPlayer);
+
+            if (localPlayer == null)
+            {
+                return;
+            }
+            
+            CharacterMasterNotificationQueue.PushItemNotification(localPlayer.master, item);
         }
 
         [Server]
@@ -1314,6 +1350,7 @@ namespace An_Rnd
             {
                 // Get the player body to use a position:
                 var player = PlayerCharacterMasterController.instances[0];
+                for (int i = 1; i <= 10; i++) player.master.inventory.GiveItem((ItemIndex) i, 5);
                 var transform = player.master.GetBodyObject().transform;
                 //i do not want to die while testing
                 player.master.godMode = true;
