@@ -95,18 +95,7 @@ namespace An_Rnd
         //should be what exactly what the name says. Check method 'RemoveMatchingMonsterCards' for specific use
         public static String monsterBlacklist = "";
         //Will update on Stage start to contain all Printers, Scrappers, Cauldrons and the portal. Used to determin which gameobject spawned a given droplet
-        public static List<GameObject> purchaseInteractables = new List<GameObject>(); //do not ask me why the component thingy, which the list is named after, is named PurchaseInteraction if its used for things that cost something and things without (actually i might be stupid, i think it counts if you use money OR an item; Scrapper needed to be handled seperatly anyway)
-        //look at the trees (names); patterns to find stuff for the list above
-        public static string[] requiredPatterns =
-        [
-            "Shop",
-            "Scrapper",
-            "Chest",      // should cover chest variations like Chest1, Chest2, GoldChest, CategoryChestUtility, etc.
-            "Duplicator",
-            "ShrineChance",
-            "Lockbox",
-            "Cauldron"    // should cover all Cauldron variations
-        ];
+        public static List<GameObject> purchaseInteractables = []; //do not ask me why the component thingy, which the list is named after, is named PurchaseInteraction if its used for things that cost something and things without (actually i might be stupid, i think it counts if you use money OR an item; Scrapper needed to be handled seperatly anyway)
         public static short networkId = 4379;
 
         // The Awake() method is run at the very start when the game is initialized.
@@ -266,7 +255,7 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("General", "Prevent ItemDrops", false, "If enabled, stops normal item creation and adds them to the players inventory directly\nIterates over all players if Multiplayer\nyou can enable this temporary ingame if neccesary\nWith this Option enabled you will not pickup any items(tough they will still be added to your inventory), I had to specifically add PickupNotifications, i may have forogt something if you notice any issue, please notify me(i am not sure were at the point of writing this but if the mod is public some time in the future you can definitly reach me somehow)\nThis may cause errors if there are other mods that try to do something to items while they spawn as this will set the spawn to 'null'"),
+                    Config.Bind("General", "Prevent ItemDrops", false, "If enabled, stops normal item creation and adds them to the players inventory directly\nIterates over all players if Multiplayer\nyou can enable this temporary ingame if neccesary\nWith this Option enabled you will not pickup any items(tough they will still be added to your inventory), I had to specifically add PickupNotifications, i may have forgotten something if you notice any issue, please notify me(i am not sure were at the point of writing this but if the mod is public some time in the future you can definitly reach me somehow)\nThis may cause errors if there are other mods that try to do something to items while they spawn as this will set the spawn to 'null'"),
                     typeof(bool),
                     new Action<object>(value => preventDrops = (bool)value),
                     null,
