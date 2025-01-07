@@ -76,6 +76,8 @@ namespace An_Rnd
         public static bool enableCrit = false;
         //Option if second crit should multiply the crit damage by 2 (base *4) instead of just base damage *3;will effect third crits, etc. the same way
         public static bool critMults = false;
+        //Optionto roll same itemstacks multiple times
+        public static bool allowDuplicates = false;
         //Option to add items to inventory directly
         public static bool preventDrops = false;
         //Option to specifically deal with lunar items when 'preventDrops' is enabled
@@ -340,6 +342,13 @@ namespace An_Rnd
                     new Action<object>(value => extraStacksThreshold = (int)value),
                     0,
                     10000
+                ),
+                (
+                    Config.Bind("Void Fields", "Allow Duplicates", false, "If enabled this allows the void fields to roll the same item twice\nNormally as long as you god crit glasses once they will not be added to the inventory again, this will make it so you could get crit glasses twice thus possibly having to deal with a higher number(of the same) but less differnt items\nCurrently duplicates the last Itemstack gotten (as in the last add happens twice) not sure why, will fix later"),
+                    typeof(bool),
+                    new Action<object>(value => allowDuplicates = (bool)value),
+                    null,
+                    null
                 ),
                 (
                     Config.Bind("Void Fields", "Monsters", 1, "Sets the number of Monsters the void fields add at once.\nReminder that this will be capped by your enemies as in the further you are in stage/lvl you may get harder enemies which you will never get even if you try 100 times (=this set to 100) stage 1\nStill causes an error but seems to work anyway, error is logged, if you are curious, but feel safe to use this for now"),
@@ -828,9 +837,20 @@ namespace An_Rnd
                 //this should start the enemies with the items of the last attempts
                 if (latestInventoryItems.Length > 0)
                 {
-                    // AddItemsFrom is a overloaded method, wich needs a filter to accept int[] as input; but we just want everything
-                    Func<ItemIndex, bool> includeAllFilter = _ => true;
-                    controller.inventory.AddItemsFrom(latestInventoryItems, includeAllFilter);
+                    Inventory inv = controller.inventory;
+                    //adding the stored items back orderd by tier
+                    foreach (ItemIndex index in ItemCatalog.tier1ItemList)
+                    {
+                        inv.GiveItem(index, latestInventoryItems[(int)index]);
+                    }
+                    foreach (ItemIndex index in ItemCatalog.tier2ItemList)
+                    {
+                        inv.GiveItem(index, latestInventoryItems[(int)index]);
+                    }
+                    foreach (ItemIndex index in ItemCatalog.tier3ItemList)
+                    {
+                        inv.GiveItem(index, latestInventoryItems[(int)index]);
+                    }
                 }
 
                 if (useShrine)
@@ -995,7 +1015,7 @@ namespace An_Rnd
 
         private void MultiplyEnemyItem(On.RoR2.ArenaMissionController.orig_AddItemStack orig, ArenaMissionController self)
         {
-            //non-host check
+            //inventory not being present caused errors on client which makes sense
             if (!self.inventory)
             {
                 orig(self);
@@ -1014,12 +1034,44 @@ namespace An_Rnd
                 else totalStacks += DifficultyCounter / extraStacksThreshold;
             }
 
-            // Call the original method to add the items
-            for (int i = 0; i < totalStacks; i++) //extraStacks can be min set to 1. Extra callings of orig, rolls for a new itemStacks and adds it to the ItemPool
+            if (allowDuplicates)
             {
-                orig(self);
-                self.nextItemStackIndex -= 1;
+                //storing to be cleared items
+                int[] tempStacks = (int[])inv.itemStacks.Clone();
+
+                for (int i = 0; i < totalStacks; i++)
+                {
+                    inv.CleanInventory(); //temporarly clearing the inventory to allow orig to add all items
+                    orig(self);
+                    ItemIndex index = self.inventory.itemAcquisitionOrder[0];
+                    tempStacks[(int)index] += self.inventory.GetItemCount(index);
+                    
+                    self.nextItemStackIndex -= 1;
+                }
+
+                //adding the stored items back orderd by tier
+                foreach (ItemIndex index in ItemCatalog.tier1ItemList)
+                {
+                    inv.GiveItem(index, tempStacks[(int) index]);
+                }
+                foreach (ItemIndex index in ItemCatalog.tier2ItemList)
+                {
+                    inv.GiveItem(index, tempStacks[(int)index]);
+                }
+                foreach (ItemIndex index in ItemCatalog.tier3ItemList)
+                {
+                    inv.GiveItem(index, tempStacks[(int)index]);
+                }
             }
+            else
+            {
+                for (int i = 0; i < totalStacks; i++)
+                {
+                    orig(self);
+                    self.nextItemStackIndex -= 1;
+                }
+            }
+
             //nextItemStackIndex sets the rarity of the ItemStack rolled for and increase by 1 after orig
             self.nextItemStackIndex += 1;
 
@@ -1385,7 +1437,7 @@ namespace An_Rnd
             {
                 // Get the player body to use a position:
                 var player = PlayerCharacterMasterController.instances[0];
-                for (int i = 1; i <= 10; i++) player.master.inventory.GiveItem((ItemIndex) i, 5);
+                for (int i = 10; i <= 20; i++) player.master.inventory.GiveItem((ItemIndex) i, 5);
                 var transform = player.master.GetBodyObject().transform;
                 //i do not want to die while testing
                 player.master.godMode = true;
