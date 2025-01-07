@@ -8,7 +8,7 @@ namespace An_Rnd
 
         internal static void Init(ManualLogSource logSource)
         {
-            _logSource = logSource; 
+            _logSource = logSource;
         }
 
         internal static void Debug(object data) => _logSource.LogDebug(data);

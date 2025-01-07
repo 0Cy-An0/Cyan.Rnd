@@ -11,6 +11,7 @@ using UnityEngine.Networking;
 using BepInEx.Bootstrap;
 using ProperSave;
 using RiskOfOptions;
+using static RoR2.GenericPickupController;
 
 namespace An_Rnd
 {
@@ -67,7 +68,7 @@ namespace An_Rnd
         //for teleporter spawn/counters with mountain shrines
         public static bool useShrine = false;
         //this will store the inventory of the enemies last void Fields; Items are stored as an array of Ints
-        public static int[] latestInventoryItems = new int[0]; //if i do not set a default, this causes problem with ProperSave
+        public static int[] latestInventoryItems = []; //if i do not set a default, this causes problem with ProperSave
         //Will remove all pre-game(logbook, select, etc.) Hightlights automatically if true
         public static bool noHightlights = false;
         //Option for Bleed-Stacking
@@ -78,6 +79,8 @@ namespace An_Rnd
         public static bool critMults = false;
         //Option to add items to inventory directly
         public static bool preventDrops = false;
+        //Option to specifically deal with lunar items when 'preventDrops' is enabled
+        public static bool preventLunar = false;
         //Need a way to keep track if properSave was used. (relevant in 'ResetRunVars')
         public static bool wasLoaded = false;
         //max charge for all 9 cells (void fields)
@@ -258,6 +261,13 @@ namespace An_Rnd
                     Config.Bind("General", "Prevent ItemDrops", false, "If enabled, stops normal item creation and adds them to the players inventory directly\nIterates over all players if Multiplayer\nyou can enable this temporary ingame if neccesary\nWith this Option enabled you will not pickup any items(tough they will still be added to your inventory), I had to specifically add PickupNotifications, i may have forgotten something if you notice any issue, please notify me(i am not sure were at the point of writing this but if the mod is public some time in the future you can definitly reach me somehow)\nThis may cause errors if there are other mods that try to do something to items while they spawn as this will set the spawn to 'null'"),
                     typeof(bool),
                     new Action<object>(value => preventDrops = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("General", "Do not prevent lunar", false, "If enabled, 'Prevent ItemDrops' will not effect any item from the tier 'Lunar' at all\nThis Option was added because of a very specific request by someone"),
+                    typeof(bool),
+                    new Action<object>(value => preventLunar = (bool)value),
                     null,
                     null
                 ),
@@ -616,10 +626,11 @@ namespace An_Rnd
 
         private GenericPickupController AddItemDirectly(On.RoR2.GenericPickupController.orig_CreatePickup orig, ref GenericPickupController.CreatePickupInfo createPickupInfo)
         {
-            ItemIndex item = createPickupInfo.pickupIndex.pickupDef.itemIndex;
-            if (preventDrops && item != ItemIndex.None)
+            PickupDef item = createPickupInfo.pickupIndex.pickupDef;
+            if (preventLunar && item.itemTier == ItemTier.Lunar) return orig(ref createPickupInfo);
+            if (preventDrops && item.itemIndex != ItemIndex.None)
             {
-                AddToPlayerInventory(item);
+                AddToPlayerInventory(item.itemIndex);
                 return null;
             }
             return orig(ref createPickupInfo);
@@ -628,8 +639,13 @@ namespace An_Rnd
         //this creates droplet objects which then turn into items, but thousands of them cause too much lag
         private void AddDropletDirectly(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 orig, GenericPickupController.CreatePickupInfo pickupInfo, Vector3 position, Vector3 velocity)
         {
-            ItemIndex item = pickupInfo.pickupIndex.pickupDef.itemIndex;
-            if (!preventDrops || item == ItemIndex.None)
+            PickupDef item = pickupInfo.pickupIndex.pickupDef;
+            if (preventLunar && item.itemTier == ItemTier.Lunar)
+            {
+                orig(pickupInfo, position, velocity);
+                return;
+            }
+            if (!preventDrops || item.itemIndex == ItemIndex.None)
             {
                 orig(pickupInfo, position, velocity);
                 return;
@@ -653,14 +669,14 @@ namespace An_Rnd
             }
 
             //its about close enough so 'Object', is probably the cause
-            if (smallestDistance <= 21f) //i tried 8 before but both ChanceShrine(18.+) and triple shop(20.+) were to faar away
+            if (smallestDistance <= 21f) //i tried 8f before but both ChanceShrine(18.+) and triple shop(20.+) were to faar away
             {
                 int index = GetPlayerIndexFromInteractionObject(smoll);
-                AddToPlayerInventory(item, index);
+                AddToPlayerInventory(item.itemIndex, index);
                 return;
             }
 
-            AddToPlayerInventory(item);
+            AddToPlayerInventory(item.itemIndex);
         }
 
         private void ExtraBleed(On.RoR2.DotController.orig_AddDot orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
