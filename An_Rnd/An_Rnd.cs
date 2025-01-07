@@ -11,8 +11,6 @@ using UnityEngine.Networking;
 using BepInEx.Bootstrap;
 using ProperSave;
 using RiskOfOptions;
-using static RoR2.GenericPickupController;
-using System.Reflection;
 
 namespace An_Rnd
 {
@@ -127,13 +125,6 @@ namespace An_Rnd
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
             On.RoR2.PurchaseInteraction.OnInteractionBegin += Purchase;
             NetworkUser.onPostNetworkUserStart += TryRegisterNetwork;
-        }
-
-        private void Purchase(On.RoR2.PurchaseInteraction.orig_OnInteractionBegin orig, PurchaseInteraction self, Interactor activator)
-        {
-            //for some reason this was not always set which i implicitly assumed for 'AddDropletDirectly'; for lunar bazaar specifically i could do self.gameObject.GetComponent<ShopTerminalBehavior>.NetworkpickupIndex to get the item but i don't think it would work for the others(tough they might have similar options); i would have to stop On.RoR2.PurchaseInteraction.CreateItemTakenOrb and it should still be the same but Im probably not going to make such huge changes if there are no big problems (i found this option to late sadly)
-            self.lastActivator = activator;
-            orig(self, activator); //not sure if that was exlusive to the ones were it did not work, or if its normal but it normally sets the activator at the start of orig, but for the bazaar taking a lunar item lastActivator was not set and calling orig just spawned the item
         }
 
         private void InitPortalPrefab()
@@ -660,12 +651,42 @@ namespace An_Rnd
                 return;
             }
 
+            float smallestDistance;
+            GameObject smoll;
+            (smallestDistance, smoll) = FindNearest(position);
+
+            //its about close enough so 'Object', is probably the cause
+            if (smallestDistance <= 26f) //i tried 8f before but both ChanceShrine(18.+) and triple shop(20.+) were to faar away; MultiShopLarge was 25.96055, always... (why is it different to the multishop, who knows; i still do not have a grasp on how far 1 unit is so idk if thats too far at this point, but i hope its fine)
+            {
+                int index = GetPlayerIndexFromInteractionObject(smoll);
+                AddToPlayerInventory(item.itemIndex, index);
+                return;
+            }
+
+            AddToPlayerInventory(item.itemIndex);
+        }
+
+        private void Purchase(On.RoR2.PurchaseInteraction.orig_OnInteractionBegin orig, PurchaseInteraction self, Interactor activator)
+        {
+            //for some reason this was not always set which i implicitly assumed for 'AddDropletDirectly'; for lunar bazaar specifically i could do self.gameObject.GetComponent<ShopTerminalBehavior>.NetworkpickupIndex to get the item but i don't think it would work for the others(tough they might have similar options); i would have to stop On.RoR2.PurchaseInteraction.CreateItemTakenOrb and it should still be the same but Im probably not going to make such huge changes if there are no big problems (i found this option to late sadly)
+            self.lastActivator = activator;
+            orig(self, activator); //not sure if that was exlusive to the ones were it did not work, or if its normal but it normally sets the activator at the start of orig, but for the bazaar taking a lunar item lastActivator was not set and calling orig just spawned the item
+        }
+
+        private (float, GameObject) FindNearest(Vector3 position)
+        {
             GameObject smoll = null;
             float smallestDistance = float.MaxValue;
 
-            //I have named the var for GameObject like this because they could be the ones responsible for this PickupDroplet
             foreach (GameObject dropletSpawner in purchaseInteractables)
             {
+                //idk why but sometimes the list had a lot of null entries; i am unsure where my Repopulation failed, but i think this should be a fine enugh solution
+                if (dropletSpawner == null) //Repopulation on StageStart failed for some reason
+                {
+                    RePopulateInteractList();
+                    return FindNearest(position);
+                }
+
                 //actually distance squared but i heard computers are faster not doing sqrt(), which makes sense
                 float distance = (position - dropletSpawner.transform.position).sqrMagnitude;
 
@@ -677,20 +698,7 @@ namespace An_Rnd
                 }
             }
 
-            //its about close enough so 'Object', is probably the cause
-            if (smallestDistance <= 21f) //i tried 8f before but both ChanceShrine(18.+) and triple shop(20.+) were to faar away
-            {
-                int index = GetPlayerIndexFromInteractionObject(smoll);
-                Log.Info($"Droplet small distance to player: {index}");
-                AddToPlayerInventory(item.itemIndex, index);
-                return;
-            }
-            else
-            {
-                Log.Info($"Droplet great distance, smallest: {smallestDistance} with {smoll.name}");
-            }
-
-            AddToPlayerInventory(item.itemIndex);
+            return (smallestDistance, smoll);
         }
 
         private void ExtraBleed(On.RoR2.DotController.orig_AddDot orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
@@ -797,7 +805,7 @@ namespace An_Rnd
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
         {
             //Extra Logic used when ItemDrops are prevented to determin things like scrap owner
-            StartCoroutine(RePopulateInteractList()); //i am a bit unclear with the wait a second thing I do here with c#/unity; it says startCoroutine does that mean a new thread? because i do not believe i do anything threadsafe at all, i could look it up or just write this here and ignore it if until it becomes a problem
+            StartCoroutine(DelayRePopulate()); //i am a bit unclear with the wait a second thing I do here with c#/unity; it says startCoroutine does that mean a new thread? because i do not believe i do anything threadsafe at all, i could look it up or just write this here and ignore it if until it becomes a problem
 
             //there is 'self.sceneDef.baseSceneName' but its seems to not be an instance for some reason, so i found this: 'SceneInfo.instance.sceneDef.baseSceneName'
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
@@ -854,10 +862,15 @@ namespace An_Rnd
             return orig(self);
         }
 
-        private IEnumerator RePopulateInteractList()
+        private IEnumerator DelayRePopulate()
         {
             //waiting because for example TripleShopController spawns the PurchaseInteraction thingys later, i assume 1 frame but waiting a bit anyway
             yield return new WaitForSeconds(0.1f);
+            RePopulateInteractList();
+        }
+
+        private void RePopulateInteractList()
+        {
             purchaseInteractables.Clear();
             GameObject[] allGameObjects = FindObjectsOfType<GameObject>();
 
@@ -895,7 +908,7 @@ namespace An_Rnd
         public void ZoneCharge(On.RoR2.HoldoutZoneController.orig_Update orig, HoldoutZoneController self)
         {
             //non-host check
-            if (!self)
+            if (!self.hasAuthority)
             {
                 orig(self);
                 return;
@@ -949,14 +962,17 @@ namespace An_Rnd
 
         private void ActivateCell(On.RoR2.ArenaMissionController.orig_BeginRound orig, ArenaMissionController self)
         {
+            
             orig(self);
-            currentCell += 1; //increase counter cuse thing happened
-            if (currentCell > 8) currentCell = 8; //there was a error that i think happened if the reset errored on client; added just to be sure
             //non-host check
-            if (!self.nullWards[self.currentRound - 1])
+            if (!self.hasAuthority)
             {
                 return;
             }
+
+            currentCell += 1; //increase counter cuse thing happened
+            if (currentCell > 8) currentCell = 8; //there was a error that i think happened if the reset errored on client; added just to be sure
+
             //should adjust based on all the settings
             HoldoutZoneController cell = self.nullWards[self.currentRound - 1].GetComponent<HoldoutZoneController>();
             cell.baseRadius *= voidRadius;
@@ -1043,7 +1059,7 @@ namespace An_Rnd
         private void MultiplyEnemyType(On.RoR2.ArenaMissionController.orig_AddMonsterType orig, ArenaMissionController self)
         {
             //non-host check
-            if (!TeleporterInteraction.instance)
+            if (!self.hasAuthority)
             {
                 orig(self);
                 return;
