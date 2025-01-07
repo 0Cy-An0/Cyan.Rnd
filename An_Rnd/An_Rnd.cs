@@ -12,6 +12,7 @@ using BepInEx.Bootstrap;
 using ProperSave;
 using RiskOfOptions;
 using static RoR2.GenericPickupController;
+using System.Reflection;
 
 namespace An_Rnd
 {
@@ -124,7 +125,15 @@ namespace An_Rnd
             On.RoR2.Stage.Start += CheckTeleporterInstance;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
+            On.RoR2.PurchaseInteraction.OnInteractionBegin += Purchase;
             NetworkUser.onPostNetworkUserStart += TryRegisterNetwork;
+        }
+
+        private void Purchase(On.RoR2.PurchaseInteraction.orig_OnInteractionBegin orig, PurchaseInteraction self, Interactor activator)
+        {
+            //for some reason this was not always set which i implicitly assumed for 'AddDropletDirectly'; for lunar bazaar specifically i could do self.gameObject.GetComponent<ShopTerminalBehavior>.NetworkpickupIndex to get the item but i don't think it would work for the others(tough they might have similar options); i would have to stop On.RoR2.PurchaseInteraction.CreateItemTakenOrb and it should still be the same but Im probably not going to make such huge changes if there are no big problems (i found this option to late sadly)
+            self.lastActivator = activator;
+            orig(self, activator); //not sure if that was exlusive to the ones were it did not work, or if its normal but it normally sets the activator at the start of orig, but for the bazaar taking a lunar item lastActivator was not set and calling orig just spawned the item
         }
 
         private void InitPortalPrefab()
@@ -356,7 +365,7 @@ namespace An_Rnd
                     10000
                 ),
                 (
-                    Config.Bind("Void Fields", "Monster Blacklist", "NoMonsterPlease", "Any String written here in the form of '[Name],[Name],...' Will be matched to the potential enemy pool and removed if a match is found\nExample, RoR2 has the Spawn Card 'cscLesserWisp' so having this set to 'cscLesserWisp' will remove only the Wisp from the potential Enemies. Setting it to 'cscLesserWisp,cscGreaterWisp' will remove both lesser and greater Wisp, wereas 'Wisp' will remove any that have the name Wisp in them which might remove other modded entries like Ancient Wisp\nAt this point you just have to know or guess the names of the SpawnCards\nCurrently leaving this empty causes every possible monster to be removed"),
+                    Config.Bind("Void Fields", "Monster Blacklist", "", "Any String written here in the form of '[Name],[Name],...' Will be matched to the potential enemy pool and removed if a match is found\nExample, RoR2 has the Spawn Card 'cscLesserWisp' so having this set to 'cscLesserWisp' will remove only the Wisp from the potential Enemies. Setting it to 'cscLesserWisp,cscGreaterWisp' will remove both lesser and greater Wisp, wereas 'Wisp' will remove any that have the name Wisp in them which might remove other modded entries like Ancient Wisp\nAt this point you just have to know or guess the names of the SpawnCards"),
                     typeof(String),
                     new Action<object>(value => monsterBlacklist = (String)value),
                     null,
@@ -672,8 +681,13 @@ namespace An_Rnd
             if (smallestDistance <= 21f) //i tried 8f before but both ChanceShrine(18.+) and triple shop(20.+) were to faar away
             {
                 int index = GetPlayerIndexFromInteractionObject(smoll);
+                Log.Info($"Droplet small distance to player: {index}");
                 AddToPlayerInventory(item.itemIndex, index);
                 return;
+            }
+            else
+            {
+                Log.Info($"Droplet great distance, smallest: {smallestDistance} with {smoll.name}");
             }
 
             AddToPlayerInventory(item.itemIndex);
@@ -1245,7 +1259,7 @@ namespace An_Rnd
                         CharacterBody controller = interactor.GetComponent<CharacterBody>();
                         if (controller != null) body = controller;
                         else Log.Warning($"Could not find CharacterBody for: {interactor.name}");
-                    } 
+                    }
                 }//I should not have named them interactor and interaction, the names are too similar
                 else Log.Warning($"Could not find interactor for interaction: {interaction.name}");
             } 
