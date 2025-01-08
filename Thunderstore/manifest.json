@@ -1,6 +1,7 @@
 {
-	"name": "CyAn_Rnd"
-	"version_number": "1.0.0"
-	"description": "random stuff is modified. Most notable are the void fields; check the page for a list of options"
+	"name": "CyAn_Rnd",
+	"version_number": "1.0.0",
+	"description": "random stuff is modified. Most notable are the void fields; check the page for a list of options",
+	"dependencies": [],
 	"website_url": "https://github.com/0Cy-An0/Cyan.Rnd"
 }
