@@ -344,7 +344,7 @@ namespace An_Rnd
                     10000
                 ),
                 (
-                    Config.Bind("Void Fields", "Allow Duplicates", false, "If enabled this allows the void fields to roll the same item twice\nNormally as long as you god crit glasses once they will not be added to the inventory again, this will make it so you could get crit glasses twice thus possibly having to deal with a higher number(of the same) but less differnt items\nCurrently duplicates the last Itemstack gotten (as in the last add happens twice) not sure why, will fix later"),
+                    Config.Bind("Void Fields", "Allow Duplicates", false, "If enabled this allows the void fields to roll the same item twice\nNormally as long as you god crit glasses once they will not be added to the inventory again, this will make it so you could get crit glasses twice thus possibly having to deal with a higher number(of the same) but less differnt items"),
                     typeof(bool),
                     new Action<object>(value => allowDuplicates = (bool)value),
                     null,
@@ -1038,14 +1038,19 @@ namespace An_Rnd
             {
                 //storing to be cleared items
                 int[] tempStacks = (int[])inv.itemStacks.Clone();
+                inv.CleanInventory(); //temporarly clearing the inventory to allow orig to add all items
 
+                //call orig(self) mutliple times and clear inventory after, to make the game pull from all possible items again
                 for (int i = 0; i < totalStacks; i++)
                 {
-                    inv.CleanInventory(); //temporarly clearing the inventory to allow orig to add all items
+                    
                     orig(self);
+                    //gets and stores the added item
                     ItemIndex index = self.inventory.itemAcquisitionOrder[0];
                     tempStacks[(int)index] += self.inventory.GetItemCount(index);
-                    
+
+                    inv.CleanInventory();
+
                     self.nextItemStackIndex -= 1;
                 }
 
