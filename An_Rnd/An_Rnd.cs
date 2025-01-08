@@ -274,7 +274,7 @@ namespace An_Rnd
                     null
                 ),
                 (
-                    Config.Bind("General", "Bleed Stacking", false, "If enabled, anytime a bleed effect is applied and the chance was over 100% there may be a second bleed stack with the remainder, which is added at the same time\nso with 600% crit chance you get 6 bleed stacks per hit"),
+                    Config.Bind("General", "Bleed Stacking", false, "If enabled, anytime a bleed effect is applied and the chance was over 100% there may be a second bleed stack with the remainder, which is added at the same time\nso with 600% crit chance you get 6 bleed stacks per hit\nwill just repeat the buff adding action of base ror2 for every extra bleed. My game starting lagging at ~10k stacks per hit"),
                     typeof(bool),
                     new Action<object>(value => enableBleed = (bool)value),
                     null,
