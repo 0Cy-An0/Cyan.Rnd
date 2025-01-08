@@ -1,6 +1,6 @@
 ﻿using BepInEx.Logging;
 
-namespace An_Rnd
+namespace CyAn_Rnd
 {
     internal static class Log
     {

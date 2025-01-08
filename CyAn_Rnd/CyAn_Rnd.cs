@@ -12,14 +12,14 @@ using BepInEx.Bootstrap;
 using ProperSave;
 using RiskOfOptions;
 
-namespace An_Rnd
+namespace CyAn_Rnd
 {
     //RoR2API stuff
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.KingEnderBrine.ProperSave", BepInDependency.DependencyFlags.SoftDependency)]
 
-    public class An_Rnd : BaseUnityPlugin
+    public class CyAn_Rnd : BaseUnityPlugin
     {
         public const string PluginGUID = "Cyan.Rnd";
         public const string PluginAuthor = "Cy/an";

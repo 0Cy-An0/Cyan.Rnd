@@ -1,15 +1,15 @@
 using RoR2;
 using UnityEngine.Networking;
 
-namespace An_Rnd
+namespace CyAn_Rnd
 {
-    public class An_Network : MessageBase
+    public class CyAn_Network : MessageBase
     {
         public ItemIndex Item { get; private set; }
 
-        public An_Network() { } //this was present in the reference i used so i am using this too. I have no idea how networking stuff works, but it would not work any other way i tried (been 3 days at this point) so yeah
+        public CyAn_Network() { } //this was present in the reference i used so i am using this too. I have no idea how networking stuff works, but it would not work any other way i tried (been 3 days at this point) so yeah
 
-        public An_Network(ItemIndex passItem)
+        public CyAn_Network(ItemIndex passItem)
         {
             Item = passItem;
         }
