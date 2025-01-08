@@ -1386,7 +1386,7 @@ namespace CyAn_Rnd
 
             NetworkUser user = NetworkUser.readOnlyInstancesList[target];
             CharacterMaster master = user.master;
-            An_Network networkItem = new(item); //this is some network vodoo in my opinion
+            CyAn_Network networkItem = new(item); //this is some network vodoo in my opinion
 
             if (master == null)
             {
@@ -1419,7 +1419,7 @@ namespace CyAn_Rnd
         //this should happen when a item is send over the network via my mod which is then queued as a pickupnotification for the reciever
         private static void RecieveItem(NetworkMessage networkMessage)
         {
-            var item = networkMessage.ReadMessage<An_Network>().Item;
+            var item = networkMessage.ReadMessage<CyAn_Network>().Item;
             var localPlayer = PlayerCharacterMasterController.instances.FirstOrDefault(x => x.networkUser.isLocalPlayer);
 
             if (localPlayer == null)
