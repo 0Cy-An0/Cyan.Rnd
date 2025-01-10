@@ -9,5 +9,4 @@ maybe Ideas:
     - option to get all three items via round robin?
 
 bugs/untested:
-- artifact of evolution
-- what happens with other orbs (like the void field rewards, there is currently no check were you are so if you get them somehwere else it should also give multiplied rewards)
+- artifact of evolution (if i remember correctly they just don't get items which would make half the options useless)

@@ -51,7 +51,7 @@ namespace CyAn_Rnd
         public static List<GameObject> purchaseInteractables = []; //do not ask me why the component thingy, which the list is named after, is named PurchaseInteraction if its used for things that cost something and things without (actually i might be stupid, i think it counts if you use money OR an item; Scrapper needed to be handled seperatly anyway)
         public static short networkId = 4379;
 
-        private static CyAn_Arena CyAn_Arena =  new();
+        private static readonly CyAn_Arena CyAn_Arena =  new();
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -898,15 +898,22 @@ namespace CyAn_Rnd
                 return;
             }
 
-            client.RegisterHandler(networkId, RecieveItem);
+            client.RegisterHandler(networkId, RecieveData);
             Log.Info($"Registerd NetworkId {networkId}");
         }
 
         //this should happen when a item is send over the network via my mod which is then queued as a pickupnotification for the reciever
-        private static void RecieveItem(NetworkMessage networkMessage)
+        //Now if any data is send
+        private static void RecieveData(NetworkMessage networkMessage)
         {
-            var item = networkMessage.ReadMessage<CyAn_Network>().Item;
-            var localPlayer = PlayerCharacterMasterController.instances.FirstOrDefault(x => x.networkUser.isLocalPlayer);
+            CyAn_Network data = networkMessage.ReadMessage<CyAn_Network>();
+            if (data.MsgType == 1)
+            {
+                CyAn_Arena.RecieveData(data);
+                return;
+            }
+            ItemIndex item = data.Item;
+            PlayerCharacterMasterController localPlayer = PlayerCharacterMasterController.instances.FirstOrDefault(x => x.networkUser.isLocalPlayer);
 
             if (localPlayer == null)
             {

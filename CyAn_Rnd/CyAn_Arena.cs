@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace CyAn_Rnd
 {
@@ -59,7 +60,8 @@ namespace CyAn_Rnd
         public static String monsterBlacklist = "";
         //Optionto roll same itemstacks multiple times
         public static bool allowDuplicates = false;
-
+        //couldnt set the recieved data as is so i store it here first
+        public static float recievedSize = 0f;
         public void RegisterArenaHooks()
         {
             On.RoR2.BazaarController.OnStartServer += CheckNullPortal;
@@ -76,6 +78,11 @@ namespace CyAn_Rnd
             //non-host check
             if (!self.hasAuthority)
             {
+                if (recievedSize > 0f)
+                {
+                    self.baseRadius = recievedSize;
+                    recievedSize = 0f;
+                }
                 orig(self);
                 return;
             }
@@ -106,6 +113,8 @@ namespace CyAn_Rnd
 
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
+            //just wanna make sure this only applies to void fields
+            if (SceneInfo.instance.sceneDef.baseSceneName != "arena") return;
 
             int total;
             if (useShrine) total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
@@ -136,6 +145,7 @@ namespace CyAn_Rnd
             {
                 return;
             }
+            Log.Info("Authority Activate!");
 
             currentCell += 1; //increase counter cuse thing happened
             if (currentCell > 8) currentCell = 8; //there was a error that i think happened if the reset errored on client; added just to be sure
@@ -145,6 +155,9 @@ namespace CyAn_Rnd
             cell.baseRadius *= voidRadius;
             cell.baseChargeDuration *= chargeDurationMult;
             cell.charge = startCharges[currentCell];
+            //sync radius to players
+            CyAn_Network Network = new(cell.baseRadius);
+            NetworkServer.SendToAll(CyAn_Rnd.networkId, Network);
         }
 
         private void FinishCell(On.RoR2.ArenaMissionController.orig_EndRound orig, ArenaMissionController self)
@@ -537,6 +550,12 @@ namespace CyAn_Rnd
             //adding the extra Credits from the config
             controller.baseMonsterCredit += extraMonsterCredits * TeleporterInteraction.instance.shrineBonusStacks;
 
+        }
+
+        public static void RecieveData(CyAn_Network data)
+        {
+            float cellSize = data.CellZoneSize;
+            recievedSize = cellSize;
         }
     }
 }
