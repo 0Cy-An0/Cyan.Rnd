@@ -11,6 +11,7 @@ using UnityEngine.Networking;
 using BepInEx.Bootstrap;
 using ProperSave;
 using RiskOfOptions;
+using System.Reflection;
 
 namespace CyAn_Rnd
 {
@@ -24,7 +25,7 @@ namespace CyAn_Rnd
         public const string PluginGUID = "Cyan.Rnd";
         public const string PluginAuthor = "Cy/an";
         public const string PluginName = "Cy/an Rnd";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.1.0";
 
         //shopPortal is not neccessary anymore but ill leave it to reuse use when testing
         private static GameObject shopPortalPrefab;
@@ -89,7 +90,7 @@ namespace CyAn_Rnd
         //starting charge for all 9 cells (void fields)
         public static float[] startCharges = [0f, 0.11f, 0.22f, 0.33f, 0.44f, 0.55f, 0.66f, 0.77f, 0.88f];
         //charge duration multiplier (void fields)
-        public static float chargeDurationMult = 0f;
+        public static float chargeDurationMult = 1f;
         //current cell Counter for the void fields; used for 'maxCharges'
         public static int currentCell = -1;
         //current PlayerCounter for item distribution
@@ -938,10 +939,11 @@ namespace CyAn_Rnd
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
                 if (self.charge <= maxCharges[currentCell]) orig(self);
-                else if (self.charge < 0.98f) //if it works correctly this if branched should only be reached once per controller after which it disables itself; but it did not, hence i added the 0.99 check
+                else if (self.charge <= 0.99f) //if it works correctly this if branched should only be reached once per Mastercontroller after which it disables itself; but it did not, hence i added the 0.99 check
                 {
                     orig(self);
-                    self.FullyChargeHoldoutZone();
+                    self.charge = 1f;
+                    //self.FullyChargeHoldoutZone(); <- this caused the zone to be stuck at 99% sometimes; I am just throwing this with this updated as a bonus, if its a big problem i will investigate correctly later
                 }
                 else
                 {
@@ -969,6 +971,7 @@ namespace CyAn_Rnd
             if (preventDrops)
             {
                 int playerIndex = GetPlayerIndexFromInteractionObject(self.gameObject);
+                Log.Info($"Got Player index: {playerIndex}");
                 AddToPlayerInventory(pickupIndex.pickupDef.itemIndex, playerIndex, total);
             }
             else
@@ -1310,6 +1313,7 @@ namespace CyAn_Rnd
         {
             //alot of checks to find the Index of the player from their interaction with the passed object
             CharacterBody body = null;
+            PlayerCharacterMasterController Mastercontroller = null;
             PurchaseInteraction interaction = Object.GetComponent<PurchaseInteraction>();
             ScrapperController scrapper = Object.GetComponent<ScrapperController>();
 
@@ -1345,23 +1349,24 @@ namespace CyAn_Rnd
                 if (uiController != null)
                 {
                     CharacterMaster master = uiController.currentParticipantMaster;
-                    if (master != null) body = master.playerCharacterMasterController.body;
-                    else Log.Warning($"Could not find CharacterMaster for: {uiController.name} (probably not OptionPickup?: {Object.name})");
+                    if (master != null) Mastercontroller = master.playerCharacterMasterController; //special option because apperently for the pickup the server has the body as null at this instance
+                    else Log.Warning($"Could not find PlayerCharacterMasterController for: {uiController.name} (probably not OptionPickup?: {Object.name})");
                 }
+                else Log.Warning($"Could not find uiController for: {Object.name}");
             }
 
-            if (body != null)
+            if (body != null || Mastercontroller != null)
             {
-                //find index of controller
-                PlayerCharacterMasterController controller = body.master.playerCharacterMasterController;
+                //find index of Mastercontroller;
+                if (Mastercontroller == null) Mastercontroller = body.master.playerCharacterMasterController;
                 for (int i = 0; i < PlayerCharacterMasterController.instances.Count; i++)
                 {
-                    if (PlayerCharacterMasterController.instances[i] == controller)
+                    if (PlayerCharacterMasterController.instances[i] == Mastercontroller)
                     {
                         return i;
                     }
                 }
-                Log.Warning($"Could not find {controller} in PlayerCharacterMasterController.instances (body: {body}, master: {body.master})");
+                Log.Warning($"Could not find {Mastercontroller} in PlayerCharacterMasterController.instances (body: {body}, master: {body.master})");
             }
             return -1;
         }
@@ -1456,6 +1461,7 @@ namespace CyAn_Rnd
             // Instantiate the portal prefab at the specified position
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
-        }*/
+        }
+        */
     }
 }

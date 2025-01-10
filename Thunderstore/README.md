@@ -1,7 +1,8 @@
 # Cy/an Random
 
 Does Random stuff I wanted to have in the game:
- - Remove all Highlights from new unlocks (this is a option in the Settings)
+ - Option to prevent ItemDrops (will directly add to inventory; should prevent lag for huge item amounts)
+ - Option to remove all Highlights (Logbook/Character Select)
  - Option to enable Crit stacking past 100% and how (if next crit should only roll for a mult increase of +1 or *2)
  - Option to enable Bleed stacking past 100%
 
@@ -14,5 +15,5 @@ Does Random stuff I wanted to have in the game:
     - various speed and cell percentage Settings
     - check the options or Config for a more detailed list that may include options not listed here
 
- - config changable with RiskOfOptions
- - saves with ProperSave
+ - config changable with RiskOfOptions if available
+ - saves with ProperSave if available
