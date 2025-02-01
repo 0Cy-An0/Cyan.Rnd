@@ -145,7 +145,6 @@ namespace CyAn_Rnd
             {
                 return;
             }
-            Log.Info("Authority Activate!");
 
             currentCell += 1; //increase counter cuse thing happened
             if (currentCell > 8) currentCell = 8; //there was a error that i think happened if the reset errored on client; added just to be sure
@@ -284,7 +283,7 @@ namespace CyAn_Rnd
 
             //increase MonsterTypes by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
             int total = extraMonsterTypes;//'extra' MonsterTypes is at least 1
-            if (extraStacksThreshold > 0)
+            if (extraMonsterTypesThreshold > 0)
             {
                 if (useShrine) total += TeleporterInteraction.instance.shrineBonusStacks / extraMonsterTypesThreshold;
                 else total += DifficultyCounter / extraMonsterTypesThreshold;

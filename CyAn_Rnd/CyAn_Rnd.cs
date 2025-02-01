@@ -929,9 +929,9 @@ namespace CyAn_Rnd
             NetworkServer.Spawn(obj); //this should sync the object to all
         }
 
-        /*private void Update()
+        private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.F2))
+            /*if (Input.GetKeyDown(KeyCode.F2))
             {
                 // Get the player body to use a position:
                 var player = PlayerCharacterMasterController.instances[0];
@@ -941,6 +941,16 @@ namespace CyAn_Rnd
                 player.master.godMode = true;
 
                 ForceSpawnPortal(transform.position);
+            }*/
+            if (Input.GetKeyDown(KeyCode.F3))
+            {
+                Log.Info("All Charges: ");
+                ArenaMissionController controller = FindObjectOfType<ArenaMissionController>();
+                foreach (GameObject obj in controller.nullWards)
+                {
+                    HoldoutZoneController zone = obj.GetComponent<HoldoutZoneController>();
+                    Log.Info(zone.charge);
+                }
             }
         }
 
@@ -950,6 +960,6 @@ namespace CyAn_Rnd
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
         }
-        */
+        
     }
 }

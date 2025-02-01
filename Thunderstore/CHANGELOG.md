@@ -1,3 +1,6 @@
+## 1.1.1
+- fixed MonsterThreshold divide by 0 error
+
 ## 1.1.0
 
 - README now contains all general options
