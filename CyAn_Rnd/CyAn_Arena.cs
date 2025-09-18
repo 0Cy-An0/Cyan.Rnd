@@ -91,10 +91,10 @@ namespace CyAn_Rnd
             if (SceneInfo.instance.sceneDef.baseSceneName == "arena")
             {
                 if (self.charge <= maxCharges[currentCell]) orig(self);
-                else if (self.charge <= 0.99f) //if it works correctly this if branched should only be reached once per Mastercontroller after which it disables itself; but it did not, hence i added the 0.99 check
+                else if (self.charge < 0.99f) //if it works correctly this if branched should only be reached once per Mastercontroller after which it disables itself; but it did not, hence i added the 0.99 check
                 {
                     orig(self);
-                    self.charge = 1f;
+                    self.charge = 99f;
                     //self.FullyChargeHoldoutZone(); <- this caused the zone to be stuck at 99% sometimes; I am just throwing this with this updated as a bonus, if its a big problem i will investigate correctly later
                 }
                 else
@@ -119,7 +119,6 @@ namespace CyAn_Rnd
             int total;
             if (useShrine) total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
             else total = Math.Max((int)Math.Floor(DifficultyCounter * extraRewards), 1);
-
 
 
             if (CyAn_Rnd.preventDrops)
@@ -168,7 +167,7 @@ namespace CyAn_Rnd
                 else diffCounter = DifficultyCounter;
                 Run.instance.stageClearCount += (int)Math.Floor(stageIncrease * diffCounter);
             }
-
+            Log.Message(self.numRewardOptions);
             orig(self);
         }
 

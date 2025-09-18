@@ -1,6 +1,7 @@
 # Cy/an Random
 
 Does Random stuff I wanted to have in the game:
+ - Artifact of Order, which selects 1 item per Tier upon run start and restricts items to that
  - Option to prevent ItemDrops (will directly add to inventory; should prevent lag for huge amounts)
  - Option to remove all Highlights (Logbook/Character Select)
  - Option to enable Crit stacking past 100% and how (if next crit should only roll for a mult increase of +1 or *2)

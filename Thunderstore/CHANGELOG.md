@@ -1,3 +1,6 @@
+## 1.2.0
+- added Artifact of Order
+
 ## 1.1.1
 - fixed MonsterThreshold divide by 0 error
 

@@ -1,16 +1,18 @@
 using BepInEx;
+using BepInEx.Bootstrap;
+using BepInEx.Configuration;
+using ProperSave;
+using RiskOfOptions;
 using RoR2;
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
-using BepInEx.Configuration;
-using System.Collections.Generic;
-using System.Linq;
 using UnityEngine.Networking;
-using BepInEx.Bootstrap;
-using ProperSave;
-using RiskOfOptions;
 
 namespace CyAn_Rnd
 {
@@ -18,13 +20,15 @@ namespace CyAn_Rnd
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.KingEnderBrine.ProperSave", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("com.bepis.r2api.language")]
+    [BepInDependency("com.bepis.r2api.content_management")]
 
     public class CyAn_Rnd : BaseUnityPlugin
     {
         public const string PluginGUID = "Cyan.Rnd";
         public const string PluginAuthor = "Cy/an";
         public const string PluginName = "Cy/an Rnd";
-        public const string PluginVersion = "1.1.0";
+        public const string PluginVersion = "1.2.0";
 
         //shopPortal is not neccessary anymore but ill leave it to reuse use when testing
         public static GameObject shopPortalPrefab;
@@ -49,9 +53,13 @@ namespace CyAn_Rnd
         public static int currentPlayer = 0;
         //Will update on Stage start to contain all Printers, Scrappers, Cauldrons and the portal. Used to determin which gameobject spawned a given droplet
         public static List<GameObject> purchaseInteractables = []; //do not ask me why the component thingy, which the list is named after, is named PurchaseInteraction if its used for things that cost something and things without (actually i might be stupid, i think it counts if you use money OR an item; Scrapper needed to be handled seperatly anyway)
+        //remind me to use PurchaseInteraction.Awake
         public static short networkId = 4379;
-
+        
         private static readonly CyAn_Arena CyAn_Arena =  new();
+
+        //Artifact stuff
+        private readonly List<CyAn_RndArtifactBase> artifacts = new();
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -73,6 +81,15 @@ namespace CyAn_Rnd
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
             On.RoR2.PurchaseInteraction.OnInteractionBegin += Purchase;
             NetworkUser.onPostNetworkUserStart += TryRegisterNetwork;
+
+            // Register Artifact of Order
+            AddArtifact(new ArtifactOfOrder());
+        }
+
+        private void AddArtifact(CyAn_RndArtifactBase artifact)
+        {
+            artifact.Init(Config);
+            artifacts.Add(artifact);
         }
 
         private void InitPrefabs()
@@ -960,6 +977,26 @@ namespace CyAn_Rnd
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
         }
-        
+
+        public static Sprite LoadEmbeddedSprite(string resourceName)
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            using (Stream stream = assembly.GetManifestResourceStream(resourceName))
+            {
+                if (stream == null)
+                {
+                    Log.Error($"[ArtifactOfOrder] Embedded resource not found: {resourceName}");
+                    return null;
+                }
+
+                byte[] data = new byte[stream.Length];
+                stream.Read(data, 0, data.Length);
+
+                Texture2D tex = new Texture2D(2, 2);
+                tex.LoadImage(data);
+                return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+            }
+        }
+
     }
 }
