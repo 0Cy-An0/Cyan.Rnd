@@ -1,3 +1,10 @@
+## 1.2.1
+- ProperSave now saves and loads Artifact of Order correctly
+- Artifact of Order no longer impacts Monster Items in the void fields
+
+## 1.2.0
+- added Artifact of Order
+
 ## 1.1.1
 - fixed MonsterThreshold divide by 0 error
 

@@ -1,16 +1,19 @@
 using BepInEx;
+using BepInEx.Bootstrap;
+using BepInEx.Configuration;
+using ProperSave;
+using RiskOfOptions;
 using RoR2;
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
-using BepInEx.Configuration;
-using System.Collections.Generic;
-using System.Linq;
 using UnityEngine.Networking;
-using BepInEx.Bootstrap;
-using ProperSave;
-using RiskOfOptions;
+using HarmonyLib;
 
 namespace CyAn_Rnd
 {
@@ -18,13 +21,15 @@ namespace CyAn_Rnd
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     [BepInDependency("com.rune580.riskofoptions", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.KingEnderBrine.ProperSave", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("com.bepis.r2api.language")]
+    [BepInDependency("com.bepis.r2api.content_management")]
 
     public class CyAn_Rnd : BaseUnityPlugin
     {
         public const string PluginGUID = "Cyan.Rnd";
         public const string PluginAuthor = "Cy/an";
         public const string PluginName = "Cy/an Rnd";
-        public const string PluginVersion = "1.1.0";
+        public const string PluginVersion = "1.2.0";
 
         //shopPortal is not neccessary anymore but ill leave it to reuse use when testing
         public static GameObject shopPortalPrefab;
@@ -49,9 +54,13 @@ namespace CyAn_Rnd
         public static int currentPlayer = 0;
         //Will update on Stage start to contain all Printers, Scrappers, Cauldrons and the portal. Used to determin which gameobject spawned a given droplet
         public static List<GameObject> purchaseInteractables = []; //do not ask me why the component thingy, which the list is named after, is named PurchaseInteraction if its used for things that cost something and things without (actually i might be stupid, i think it counts if you use money OR an item; Scrapper needed to be handled seperatly anyway)
+        //remind me to use PurchaseInteraction.Awake
         public static short networkId = 4379;
-
+        
         private static readonly CyAn_Arena CyAn_Arena =  new();
+
+        //Artifact stuff
+        private readonly List<CyAn_RndArtifactBase> artifacts = new();
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -73,6 +82,17 @@ namespace CyAn_Rnd
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
             On.RoR2.PurchaseInteraction.OnInteractionBegin += Purchase;
             NetworkUser.onPostNetworkUserStart += TryRegisterNetwork;
+
+            // Register Artifact of Order
+            AddArtifact(new ArtifactOfOrder());
+            var harmony = new Harmony(PluginGUID);
+            harmony.PatchAll();
+        }
+
+        private void AddArtifact(CyAn_RndArtifactBase artifact)
+        {
+            artifact.Init(Config);
+            artifacts.Add(artifact);
         }
 
         private void InitPrefabs()
@@ -108,8 +128,11 @@ namespace CyAn_Rnd
                 {
                     CyAn_Arena.latestInventoryItems,
                     CyAn_Arena.arenaCount,
-                    currentPlayer
+                    currentPlayer,
+                    ArtifactOfOrder.tierToItemMap.Select(kvp => new KeyValuePair<int, int>((int)kvp.Key, (int)kvp.Value)).ToList(),
+                    (int)ArtifactOfOrder.allowedEquipment
                 };
+
                 //there was some error when i used my GUID, either i made a mistake or it was the '.' so I removed it
                 dictionary["CyanRnd"] = saveData;
                 Log.Info("Save data successfully added to ProperSave.");
@@ -122,9 +145,9 @@ namespace CyAn_Rnd
                     Log.Warning("Could not find SaveData");
                     return;
                 }
-                if (savedData.Value is object[] loadedData && loadedData.Length == 3)
+                if (savedData.Value is object[] loadedData && loadedData.Length == 5)
                 {
-                    //So apperently ProperSaves loads saved int[] as object (which i kinda had to figure out via Consol Logs, because i am stupid) so here is a conversion, that i defintily came up with my self and did not ask chatGpt for
+                    //So apparently ProperSaves loads saved int[] as object (which i kinda had to figure out via Consol Logs, because i am stupid) so here is a conversion, that i defintily came up with my self and did not ask chatGpt for
                     try
                     {
                         // Casts loadedData[0](object) to List<object> and converts this to int[](by casting it to List<int> and then converting to array._.) because of course i can't just cast to (int[])
@@ -139,7 +162,33 @@ namespace CyAn_Rnd
                     currentPlayer = Convert.ToInt32(loadedData[2]);
                     wasLoaded = true; //this is so that the loaded variables are not reset for 'a new run'
 
+                    try
+                    {
+                        List<object> rawList = (List<object>)loadedData[3];
+
+                        ArtifactOfOrder.tierToItemMap = rawList.Select(obj =>
+                            {
+                                var dict = (Dictionary<string, object>)obj;
+                                int key = Convert.ToInt32(dict["Key"]);
+                                int value = Convert.ToInt32(dict["Value"]);
+                                return new KeyValuePair<ItemTier, ItemIndex>((ItemTier)key, (ItemIndex)value);
+                            }).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"Failed to Load save Data because: \"Failure to convert object to Dictionary<ItemTier, ItemIndex>. Exception: {ex.Message}\"");
+                    }
+
+                    ArtifactOfOrder.allowedEquipment = (EquipmentIndex) Convert.ToInt32(loadedData[4]);
+
                     Log.Info($"Loaded latestInventoryItems, arenaCount({CyAn_Arena.arenaCount}) and currentPlayer({currentPlayer}) with ProperSave.");
+                    Log.Info($"[Artifact of Order] Chosen allowed equipment: {Language.GetString(EquipmentCatalog.GetEquipmentDef(ArtifactOfOrder.allowedEquipment).nameToken)}");
+                    foreach (var kvp in ArtifactOfOrder.tierToItemMap)
+                    {
+                        var itemDef = ItemCatalog.GetItemDef(kvp.Value);
+                        string itemName = itemDef != null ? Language.GetString(itemDef.nameToken) : $"Unknown({kvp.Key} : {kvp.Value})";
+                        Log.Info($"[Artifact of Order] Loaded Item for {kvp.Key}: {itemName}");
+                    }
                 }
                 else
                 {
@@ -748,8 +797,9 @@ namespace CyAn_Rnd
         {
             if (wasLoaded)
             {
-                wasLoaded = false;
+                //making sure wasLoaded is set to fals only after the normal run start; so that other run starts can check on this
                 orig(self);
+                wasLoaded = false;
                 return;
             }
             CyAn_Arena.latestInventoryItems = new int[0];
@@ -941,7 +991,7 @@ namespace CyAn_Rnd
                 player.master.godMode = true;
 
                 ForceSpawnPortal(transform.position);
-            }*/
+            }
             if (Input.GetKeyDown(KeyCode.F3))
             {
                 Log.Info("All Charges: ");
@@ -951,7 +1001,7 @@ namespace CyAn_Rnd
                     HoldoutZoneController zone = obj.GetComponent<HoldoutZoneController>();
                     Log.Info(zone.charge);
                 }
-            }
+            }*/
         }
 
         private void ForceSpawnPortal(Vector3 position)
@@ -960,6 +1010,79 @@ namespace CyAn_Rnd
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
         }
-        
+
+        public static Sprite LoadEmbeddedSprite(string resourceName)
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            using (Stream stream = assembly.GetManifestResourceStream(resourceName))
+            {
+                if (stream == null)
+                {
+                    Log.Error($"[ArtifactOfOrder] Embedded resource not found: {resourceName}");
+                    return null;
+                }
+
+                byte[] data = new byte[stream.Length];
+                stream.Read(data, 0, data.Length);
+
+                Texture2D tex = new Texture2D(2, 2);
+                tex.LoadImage(data);
+                return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+            }
+        }
+
+    }
+
+    //ArenaMonsterItemDropTable drop override; for when Order is active
+    [HarmonyPatch(typeof(ArenaMonsterItemDropTable), nameof(ArenaMonsterItemDropTable.GenerateDropPreReplacement))]
+    public static class Patch_ArenaMonsterItemDropTable_GenerateDrop
+    {
+        public static bool Prefix(
+            ArenaMonsterItemDropTable __instance,
+            Xoroshiro128Plus rng,
+            ref PickupIndex __result)
+        {
+            if (!ArtifactOfOrder.orderActive)
+                return true; // fall back to vanilla
+
+            // Reflect private 'selector' field
+            var selectorField = typeof(ArenaMonsterItemDropTable).GetField("selector", BindingFlags.NonPublic | BindingFlags.Instance);
+            var selector = (WeightedSelection<PickupIndex>)selectorField.GetValue(__instance);
+
+            // Clear selector
+            selector.Clear();
+
+            // Add custom items
+            Add(__instance, selector, ArtifactOfOrder.originalTier1DropList, __instance.tier1Weight);
+            Add(__instance, selector, ArtifactOfOrder.originalTier2DropList, __instance.tier2Weight);
+            Add(__instance, selector, ArtifactOfOrder.originalTier3DropList, __instance.tier3Weight);
+            Add(__instance, selector, ArtifactOfOrder.originalBossDropList, __instance.bossWeight);
+            Add(__instance, selector, ArtifactOfOrder.originalLunarDropList, __instance.lunarItemWeight);
+            Add(__instance, selector, ArtifactOfOrder.originalVoidTier1DropList, __instance.voidTier1Weight);
+            Add(__instance, selector, ArtifactOfOrder.originalVoidTier2DropList, __instance.voidTier2Weight);
+            Add(__instance, selector, ArtifactOfOrder.originalVoidTier3DropList, __instance.voidTier3Weight);
+            Add(__instance, selector, ArtifactOfOrder.originalVoidBossDropList, __instance.voidBossWeight);
+
+            // Generate drop
+            __result = PickupDropTable.GenerateDropFromWeightedSelection(rng, selector);
+            return false; // Skip original method
+        }
+
+        // Helper to call Add while accessing private methods
+        private static void Add(ArenaMonsterItemDropTable instance, WeightedSelection<PickupIndex> selector, List<PickupIndex> sourceList, float weight)
+        {
+            if (weight <= 0f || sourceList == null || sourceList.Count == 0)
+                return;
+
+            MethodInfo passesFilterMethod = typeof(ArenaMonsterItemDropTable).GetMethod("PassesFilter", BindingFlags.NonPublic | BindingFlags.Instance);
+            foreach (PickupIndex pickup in sourceList)
+            {
+                bool passes = (bool)passesFilterMethod.Invoke(instance, new object[] { pickup });
+                if (passes)
+                {
+                    selector.AddChoice(pickup, weight);
+                }
+            }
+        }
     }
 }
