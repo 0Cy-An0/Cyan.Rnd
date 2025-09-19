@@ -27,6 +27,7 @@ namespace CyAn_Rnd
 
         public static EquipmentIndex allowedEquipment = EquipmentIndex.None;
 
+
         private bool isEnforcingRestrictions = false;
 
         public static List<PickupIndex> originalTier1DropList;
@@ -109,34 +110,42 @@ namespace CyAn_Rnd
                 // Choose one item per tier at random and store
                 foreach (var (tier, dropList) in tierDropListMap)
                 {
-                    if (dropList.Count == 0) continue;
+                if (dropList.Count == 0) continue;
 
                     PickupIndex chosen = dropList[UnityEngine.Random.Range(0, dropList.Count)];
                     PickupDef chosenDef = PickupCatalog.GetPickupDef(chosen);
 
                     if (chosenDef.itemIndex != ItemIndex.None)
-                    {
+                {
                         tierToItemMap[tier] = chosenDef.itemIndex;
                         Log.Info($"Chosen allowed Item for Tier {tier}: {Language.GetString(chosenDef.nameToken)}");
-                    }
                 }
+            }
 
                 // Choose one equipment at random if available
-                if (equipmentPickups.Count > 0)
-                {
+            if (equipmentPickups.Count > 0)
+            {
                     PickupIndex chosenEquipPickup = equipmentPickups[UnityEngine.Random.Range(0, equipmentPickups.Count)];
                     allowedEquipment = PickupCatalog.GetPickupDef(chosenEquipPickup).equipmentIndex;
                     Log.Info($"Chosen allowed equipment: {Language.GetString(EquipmentCatalog.GetEquipmentDef(allowedEquipment).nameToken)}");
-                }
-                else
-                {
-                    allowedEquipment = EquipmentIndex.None;
-                }
             }
+            else
+            {
+                allowedEquipment = EquipmentIndex.None;
+                //Log.Info("No available equipment to choose from.");
+            }
+        }
 
             // Disable unchosen items
             foreach (var dropList in tierDropListMap.Values)
             {
+                List<PickupIndex> dropList = kvp.Value;
+                if (dropList.Count <= 1) continue;
+
+                // Pick one to keep
+                PickupIndex chosenPickup = dropList[UnityEngine.Random.Range(0, dropList.Count)];
+
+                // Disable all others
                 foreach (var pickup in dropList)
                 {
                     PickupDef def = PickupCatalog.GetPickupDef(pickup);
@@ -149,14 +158,17 @@ namespace CyAn_Rnd
             }
 
             // Disable unchosen equipment
-            foreach (var pickup in equipmentPickups)
-            {
+                foreach (var pickup in equipmentPickups)
+                {
                 PickupDef def = PickupCatalog.GetPickupDef(pickup);
                 if (def.equipmentIndex != allowedEquipment)
-                {
-                    run.DisablePickupDrop(pickup);
+                    {
+                        run.DisablePickupDrop(pickup);
+                    }
                 }
             }
+
+            PopulateTierToItemMap();
         }
 
         private void RemovePrintersAndScrappers(SceneDirector director, DirectorCardCategorySelection dccs)
@@ -203,15 +215,20 @@ namespace CyAn_Rnd
                 int count = inventory.GetItemCount(itemIndex);
                 if (count <= 0) continue;
 
+            foreach (ItemIndex itemIndex in inventory.itemStacks.ToArray())
+            {
                 ItemDef itemDef = ItemCatalog.GetItemDef(itemIndex);
                 if (itemDef == null || itemDef.tier == ItemTier.NoTier) continue;
-
+                
                 if (tierToItemMap.ContainsValue(itemIndex)) continue;
 
                 if (tierToItemMap.TryGetValue(itemDef.tier, out ItemIndex replacementItem))
                 {
-                    inventory.RemoveItem(itemIndex, count);
-                    inventory.GiveItem(replacementItem, count);
+                    int count = inventory.GetItemCount(itemIndex);
+                    if (count > 0)
+                    {
+                        inventory.RemoveItem(itemIndex, count);
+                        inventory.GiveItem(replacementItem, count);
                     Log.Info($"Replaced {Language.GetString(itemDef.nameToken)} with {Language.GetString(ItemCatalog.GetItemDef(replacementItem).nameToken)}");
                 }
                 else
