@@ -114,7 +114,11 @@ namespace CyAn_Rnd
         private void MultiplyItemReward(On.RoR2.PickupPickerController.orig_CreatePickup_PickupIndex orig, PickupPickerController self, PickupIndex pickupIndex)
         {
             //just wanna make sure this only applies to void fields
-            if (SceneInfo.instance.sceneDef.baseSceneName != "arena") return;
+            if (SceneInfo.instance.sceneDef.baseSceneName != "arena")
+            {
+                orig(self, pickupIndex);
+                return; 
+            }
 
             int total;
             if (useShrine) total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained

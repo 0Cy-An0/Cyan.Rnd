@@ -1,3 +1,6 @@
+## 1.2.2
+- fixed potentials not working outside the void fields
+
 ## 1.2.1
 - ProperSave now saves and loads Artifact of Order correctly
 - Artifact of Order no longer impacts Monster Items in the void fields
