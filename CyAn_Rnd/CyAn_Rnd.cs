@@ -1,9 +1,11 @@
 using BepInEx;
 using BepInEx.Bootstrap;
 using BepInEx.Configuration;
+using HarmonyLib;
 using ProperSave;
 using RiskOfOptions;
 using RoR2;
+using RoR2BepInExPack.GameAssetPaths;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -13,7 +15,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.Networking;
-using HarmonyLib;
+using static RoR2.PickupPickerController;
 
 namespace CyAn_Rnd
 {
@@ -29,7 +31,7 @@ namespace CyAn_Rnd
         public const string PluginGUID = "Cyan.Rnd";
         public const string PluginAuthor = "Cy/an";
         public const string PluginName = "Cy/an Rnd";
-        public const string PluginVersion = "1.2.0";
+        public const string PluginVersion = "1.2.3";
 
         //shopPortal is not neccessary anymore but ill leave it to reuse use when testing
         public static GameObject shopPortalPrefab;
@@ -82,6 +84,9 @@ namespace CyAn_Rnd
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
             On.RoR2.PurchaseInteraction.OnInteractionBegin += Purchase;
             NetworkUser.onPostNetworkUserStart += TryRegisterNetwork;
+            On.RoR2.CharacterMasterNotificationQueue.PushItemNotification += OrderNotificationOverwrite;
+            On.RoR2.CharacterMasterNotificationQueue.PushEquipmentNotification += OrderNotificationOverwrite2;
+            On.RoR2.PickupDropletController.CreatePickup += OrderDropletOverwrite;
 
             // Register Artifact of Order
             AddArtifact(new ArtifactOfOrder());
@@ -202,10 +207,13 @@ namespace CyAn_Rnd
         private void InitRiskOfOptions((ConfigEntryBase config, Type StaticType, Action<object> updateStaticVar, object min, object max)[]  configEntries)
         {
 
-            foreach (var (config, varType, _, min, max) in configEntries)
+            foreach (var (config, varType, action, min, max) in configEntries)
             {
-                AddOption(config, varType, min, max);
+                AddOption(config, varType, action, min, max);
             }
+
+            //set the Icon
+            ModSettingsManager.SetModIcon(LoadEmbeddedSprite("CyAn_Rnd.Resources.icon.png"), PluginGUID, PluginName);
 
             //Hook setting changes; Updates the given Variable if the Option was changed via RiskOfOptions
             foreach (var (config, StaticType, updateStaticVar, _, _) in configEntries)
@@ -230,6 +238,10 @@ namespace CyAn_Rnd
                 {
                     ConfigEntry<String> castConfig = (ConfigEntry<String>)config;
                     castConfig.SettingChanged += (sender, args) => updateStaticVar(castConfig.Value);
+                }
+                else if (StaticType == typeof(RiskOfOptions.Options.GenericButtonOption))
+                {
+                    //button is special
                 }
                 else
                 {
@@ -288,6 +300,13 @@ namespace CyAn_Rnd
                     new Action<object>(value => critMults = (bool)value),
                     null,
                     null
+                ),
+                (
+                    null,
+                    typeof(RiskOfOptions.Options.GenericButtonOption),
+                    new Action<object>(_ => CheatUnlockAllItemsAndSurvivors()),
+                    "Unlock all",
+                    "General"
                 ),
                 (
                     Config.Bind("Void Fields", "Use Shrines", false, "If enabled, will spawn a unusable teleporter in the void fields to activate mountainShrines instead of just an internal counter\nAny use of the difficulty counter is replaced by the current active mountain Shrines\nThis Option will probably do nothing if you do not have other mods that interact with mountain shrines, i reccomend looking for one that makes them persist over the whole run after activiating"),
@@ -567,9 +586,14 @@ namespace CyAn_Rnd
                     ConfigEntry<String> castConfig = (ConfigEntry<String>)config;
                     update(castConfig.Value);
                 }
+                else if (type == typeof(RiskOfOptions.Options.GenericButtonOption))
+                {
+                    //button has no update
+                }
                 else
                 {
-                    Log.Error($"{config.Definition.Key} is of invalid type: {type}");
+                    string key = config?.Definition?.Key ?? "UnknownKey";
+                    Log.Error($"{key} is of invalid type: {type}");
                 }
             }
 
@@ -577,7 +601,7 @@ namespace CyAn_Rnd
         }
 
         //Adds RiskOfOptions Option
-        private void AddOption(ConfigEntryBase config, Type varType, object min, object max)
+        private void AddOption(ConfigEntryBase config, Type varType, Action<object> action, object min, object max)
         {
             //make sure the config that is beeing used here is used with the correct typing
             if (varType == typeof(int))
@@ -615,9 +639,21 @@ namespace CyAn_Rnd
                 ModSettingsManager.AddOption(option);
                 Log.Info($"Added RiskOfOption '{config.Definition.Key}' as StringInputField");
             }
+            else if (varType == typeof(RiskOfOptions.Options.GenericButtonOption)) // Button case
+            {
+                ModSettingsManager.AddOption(new RiskOfOptions.Options.GenericButtonOption(
+                    "Does what it says",
+                    (string)max,
+                    "Button that unlocks every item and survivor. Helpfull if you switch mods alot",
+                    (string)min,
+                    () => action(null)
+                ));
+                Log.Info($"Added RiskOfOption '{min}' as GenericButton");
+            }
             else
             {
-                Log.Error($"Failed to create option for {config.Definition.Key} because type was {varType}");
+                string key = config?.Definition?.Key ?? "UnknownKey";
+                Log.Error($"Failed to create option for {key} because type was {varType}");
             }
         }
 
@@ -1031,6 +1067,95 @@ namespace CyAn_Rnd
             }
         }
 
+        private static void CheatUnlockAllItemsAndSurvivors()
+        {
+            var userProfile = LocalUserManager.GetFirstLocalUser()?.userProfile;
+            if (userProfile == null)
+            {
+                Log.Warning("No user profile found.");
+                return;
+            }
+
+            int unlocked = 0;
+
+            foreach (var itemDef in ItemCatalog.allItemDefs)
+            {
+                if (itemDef?.unlockableDef && !userProfile.HasUnlockable(itemDef.unlockableDef))
+                {
+                    userProfile.GrantUnlockable(itemDef.unlockableDef);
+                    unlocked++;
+                }
+            }
+
+            foreach (var equipmentDef in EquipmentCatalog.equipmentDefs)
+            {
+                if (equipmentDef?.unlockableDef && !userProfile.HasUnlockable(equipmentDef.unlockableDef))
+                {
+                    userProfile.GrantUnlockable(equipmentDef.unlockableDef);
+                    unlocked++;
+                }
+            }
+
+            foreach (var survivorDef in SurvivorCatalog.orderedSurvivorDefs)
+            {
+                if (survivorDef?.unlockableDef && !userProfile.HasUnlockable(survivorDef.unlockableDef))
+                {
+                    userProfile.GrantUnlockable(survivorDef.unlockableDef);
+                    unlocked++;
+                }
+            }
+
+            userProfile.RequestEventualSave();
+            Log.Message($"[Cheat] Unlocked {unlocked} entries (items/survivors).");
+        }
+
+        private void OrderNotificationOverwrite(On.RoR2.CharacterMasterNotificationQueue.orig_PushItemNotification orig, CharacterMaster characterMaster, ItemIndex itemIndex)
+        {
+            if (!ArtifactOfOrder.orderActive)
+            {
+                orig(characterMaster, itemIndex);
+                return;
+            }
+
+            orig(characterMaster, ArtifactOfOrder.tierToItemMap[ItemCatalog.GetItemDef(itemIndex).tier]);
+        }
+
+        private void OrderNotificationOverwrite2(On.RoR2.CharacterMasterNotificationQueue.orig_PushEquipmentNotification orig, CharacterMaster characterMaster, EquipmentIndex equipmentIndex)
+        {
+            if (!ArtifactOfOrder.orderActive)
+            {
+                orig(characterMaster, equipmentIndex);
+                return;
+            }
+
+            orig(characterMaster, ArtifactOfOrder.allowedEquipment);
+        }
+
+        private void OrderDropletOverwrite(On.RoR2.PickupDropletController.orig_CreatePickup orig, PickupDropletController self)
+        {
+            if (!ArtifactOfOrder.orderActive)
+            {
+                orig(self);
+                return;
+            }
+            if (PickupCatalog.GetPickupDef(self.pickupIndex).itemTier != ItemTier.NoTier)
+            {
+                self.pickupIndex = ItemCatalog.GetItemDef(ArtifactOfOrder.tierToItemMap[PickupCatalog.GetPickupDef(self.pickupIndex).itemTier]).CreatePickupDef().pickupIndex;
+                //self.createPickupInfo.pickupIndex = self.pickupIndex;
+            }
+            else if (PickupCatalog.GetPickupDef(self.pickupIndex).isLunar) //probably lunar coin
+            {
+                orig(self);
+                return;
+            }
+            else //equipment
+            {
+                self.pickupIndex = EquipmentCatalog.GetEquipmentDef(ArtifactOfOrder.allowedEquipment).CreatePickupDef().pickupIndex;
+                //self.createPickupInfo.pickupIndex = self.pickupIndex;
+            }
+
+            orig(self);
+        }
     }
 
     //ArenaMonsterItemDropTable drop override; for when Order is active

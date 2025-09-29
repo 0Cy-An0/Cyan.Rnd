@@ -171,7 +171,7 @@ namespace CyAn_Rnd
                 else diffCounter = DifficultyCounter;
                 Run.instance.stageClearCount += (int)Math.Floor(stageIncrease * diffCounter);
             }
-            Log.Message(self.numRewardOptions);
+            //Log.Message(self.numRewardOptions);
             orig(self);
         }
 

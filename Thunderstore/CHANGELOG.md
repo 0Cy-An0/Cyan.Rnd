@@ -1,3 +1,7 @@
+## 1.2.3
+- made Artifact of Order more robust (for example now overwrites pickup notifications too)
+- added unlock all button
+
 ## 1.2.2
 - fixed potentials not working outside the void fields
 

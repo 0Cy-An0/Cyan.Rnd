@@ -1,6 +1,6 @@
 {
 	"name": "CyAn_Rnd",
-	"version_number": "1.2.2",
+	"version_number": "1.2.3",
 	"description": "random stuff is modified. Most notable are the void fields; check the page for a list of options",
 	"dependencies": [
 		"bbepis-BepInExPack-5.4.2113",

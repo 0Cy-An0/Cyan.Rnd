@@ -34,6 +34,7 @@
 	  </Reference>
     <EmbeddedResource Include="Resources\order_enabled.png" />
     <EmbeddedResource Include="Resources\order_disabled.png" />
+    <EmbeddedResource Include="Resources\icon.png" />
 	</ItemGroup>
 
 </Project>

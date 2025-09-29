@@ -2,6 +2,7 @@ using BepInEx.Configuration;
 using RoR2;
 using System.Collections.Generic;
 using UnityEngine;
+using static RoR2.GenericPickupController;
 
 namespace CyAn_Rnd
 {
