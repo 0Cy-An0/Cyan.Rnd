@@ -1,3 +1,6 @@
+## 1.2.4
+- updated for Alloyed Collective (mod now loads again)
+
 ## 1.2.3
 - made Artifact of Order more robust (for example now overwrites pickup notifications too)
 - added unlock all button
