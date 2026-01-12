@@ -79,12 +79,12 @@ namespace CyAn_Rnd
             On.RoR2.GenericPickupController.CreatePickup += AddItemDirectly;
             On.RoR2.PickupDropletController.CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 += AddDropletDirectly;
             On.RoR2.HealthComponent.TakeDamage += ExtraCrit;
-            On.RoR2.DotController.AddDot += ExtraBleed;
+            On.RoR2.DotController.AddDot_GameObject_float_DotIndex_float_Nullable1_Nullable1_Nullable1 += ExtraBleed;
             On.RoR2.Run.Start += ResetRunVars;
             On.RoR2.UserProfile.HasViewedViewable += Viewed;
             On.RoR2.PurchaseInteraction.OnInteractionBegin += Purchase;
             NetworkUser.onPostNetworkUserStart += TryRegisterNetwork;
-            On.RoR2.CharacterMasterNotificationQueue.PushItemNotification += OrderNotificationOverwrite;
+            On.RoR2.CharacterMasterNotificationQueue.PushItemNotification_CharacterMaster_ItemIndex += OrderNotificationOverwrite;
             On.RoR2.CharacterMasterNotificationQueue.PushEquipmentNotification += OrderNotificationOverwrite2;
             On.RoR2.PickupDropletController.CreatePickup += OrderDropletOverwrite;
 
@@ -741,7 +741,7 @@ namespace CyAn_Rnd
             return (smallestDistance, smoll);
         }
 
-        private void ExtraBleed(On.RoR2.DotController.orig_AddDot orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
+        private void ExtraBleed(On.RoR2.DotController.orig_AddDot_GameObject_float_DotIndex_float_Nullable1_Nullable1_Nullable1 orig, DotController self, GameObject attackerObject, float duration, DotController.DotIndex dotIndex, float damageMultiplier, uint? maxStacksFromAttacker, float? totalDamage, DotController.DotIndex? preUpgradeDotIndex)
         {
             CharacterBody attacker = attackerObject.GetComponent<CharacterBody>();
 
@@ -1080,6 +1080,7 @@ namespace CyAn_Rnd
 
             foreach (var itemDef in ItemCatalog.allItemDefs)
             {
+                Log.Info($"checking Item : {itemDef.nameToken}");
                 if (itemDef?.unlockableDef && !userProfile.HasUnlockable(itemDef.unlockableDef))
                 {
                     userProfile.GrantUnlockable(itemDef.unlockableDef);
@@ -1089,6 +1090,7 @@ namespace CyAn_Rnd
 
             foreach (var equipmentDef in EquipmentCatalog.equipmentDefs)
             {
+                Log.Info($"checking equipment : {equipmentDef.nameToken}");
                 if (equipmentDef?.unlockableDef && !userProfile.HasUnlockable(equipmentDef.unlockableDef))
                 {
                     userProfile.GrantUnlockable(equipmentDef.unlockableDef);
@@ -1098,6 +1100,7 @@ namespace CyAn_Rnd
 
             foreach (var survivorDef in SurvivorCatalog.orderedSurvivorDefs)
             {
+                Log.Info($"checking equipment : {survivorDef.displayNameToken}");
                 if (survivorDef?.unlockableDef && !userProfile.HasUnlockable(survivorDef.unlockableDef))
                 {
                     userProfile.GrantUnlockable(survivorDef.unlockableDef);
@@ -1109,7 +1112,7 @@ namespace CyAn_Rnd
             Log.Message($"[Cheat] Unlocked {unlocked} entries (items/survivors).");
         }
 
-        private void OrderNotificationOverwrite(On.RoR2.CharacterMasterNotificationQueue.orig_PushItemNotification orig, CharacterMaster characterMaster, ItemIndex itemIndex)
+        private void OrderNotificationOverwrite(On.RoR2.CharacterMasterNotificationQueue.orig_PushItemNotification_CharacterMaster_ItemIndex orig, CharacterMaster characterMaster, ItemIndex itemIndex)
         {
             if (!ArtifactOfOrder.orderActive)
             {
@@ -1120,15 +1123,15 @@ namespace CyAn_Rnd
             orig(characterMaster, ArtifactOfOrder.tierToItemMap[ItemCatalog.GetItemDef(itemIndex).tier]);
         }
 
-        private void OrderNotificationOverwrite2(On.RoR2.CharacterMasterNotificationQueue.orig_PushEquipmentNotification orig, CharacterMaster characterMaster, EquipmentIndex equipmentIndex)
+        private void OrderNotificationOverwrite2(On.RoR2.CharacterMasterNotificationQueue.orig_PushEquipmentNotification orig, CharacterMaster characterMaster, EquipmentIndex equipmentIndex, int upgradeCount)
         {
             if (!ArtifactOfOrder.orderActive)
             {
-                orig(characterMaster, equipmentIndex);
+                orig(characterMaster, equipmentIndex, upgradeCount);
                 return;
             }
 
-            orig(characterMaster, ArtifactOfOrder.allowedEquipment);
+            orig(characterMaster, ArtifactOfOrder.allowedEquipment, upgradeCount);
         }
 
         private void OrderDropletOverwrite(On.RoR2.PickupDropletController.orig_CreatePickup orig, PickupDropletController self)
@@ -1138,19 +1141,24 @@ namespace CyAn_Rnd
                 orig(self);
                 return;
             }
-            if (PickupCatalog.GetPickupDef(self.pickupIndex).itemTier != ItemTier.NoTier)
+            var pickupDef = PickupCatalog.GetPickupDef(self.pickupState.pickupIndex);
+
+            if (pickupDef.itemTier != ItemTier.NoTier)
             {
-                self.pickupIndex = ItemCatalog.GetItemDef(ArtifactOfOrder.tierToItemMap[PickupCatalog.GetPickupDef(self.pickupIndex).itemTier]).CreatePickupDef().pickupIndex;
+                self.pickupState.pickupIndex = ItemCatalog.GetItemDef(ArtifactOfOrder.tierToItemMap[pickupDef.itemTier]).CreatePickupDef().pickupIndex;
+                //both old versions:
+                //self.pickupIndex = ItemCatalog.GetItemDef(ArtifactOfOrder.tierToItemMap[PickupCatalog.GetPickupDef(self.pickupIndex).itemTier]).CreatePickupDef().pickupIndex;
                 //self.createPickupInfo.pickupIndex = self.pickupIndex;
             }
-            else if (PickupCatalog.GetPickupDef(self.pickupIndex).isLunar) //probably lunar coin
+            else if (pickupDef.isLunar) //probably lunar coin
             {
                 orig(self);
                 return;
             }
             else //equipment
             {
-                self.pickupIndex = EquipmentCatalog.GetEquipmentDef(ArtifactOfOrder.allowedEquipment).CreatePickupDef().pickupIndex;
+                self.pickupState.pickupIndex = EquipmentCatalog.GetEquipmentDef(ArtifactOfOrder.allowedEquipment).CreatePickupDef().pickupIndex; ;
+                //self.pickupIndex = EquipmentCatalog.GetEquipmentDef(ArtifactOfOrder.allowedEquipment).CreatePickupDef().pickupIndex;
                 //self.createPickupInfo.pickupIndex = self.pickupIndex;
             }
 

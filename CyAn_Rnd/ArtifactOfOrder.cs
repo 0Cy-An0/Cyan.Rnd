@@ -95,6 +95,32 @@ namespace CyAn_Rnd
 
             List<PickupIndex> equipmentPickups = new(run.availableEquipmentDropList);
             equipmentPickups.AddRange(run.availableLunarEquipmentDropList);
+            var eqIndex = EquipmentCatalog.FindEquipmentIndex("Recycler");
+            if (eqIndex != EquipmentIndex.None)
+            {
+                var eqDef = EquipmentCatalog.GetEquipmentDef(eqIndex);
+                if (eqDef != null)
+                {
+                    var pickupDef = eqDef.CreatePickupDef();
+                    if (pickupDef != null && pickupDef.pickupIndex.isValid)
+                    {
+                        equipmentPickups.Remove(pickupDef.pickupIndex);
+                        Log.Info($"trying to remove recylcer from equipment got: {Language.GetString(pickupDef.nameToken)}");
+                    }
+                    else
+                    {
+                        Log.Info("Error 3");
+                    }
+                }
+                else
+                {
+                    Log.Info("Error 2");
+                }
+            }
+            else
+            {
+                Log.Info("Error 1");
+            }
 
             if (!CyAn_Rnd.wasLoaded)
             {
@@ -120,7 +146,7 @@ namespace CyAn_Rnd
                 {
                     PickupIndex chosenEquipPickup = equipmentPickups[UnityEngine.Random.Range(0, equipmentPickups.Count)];
                     allowedEquipment = PickupCatalog.GetPickupDef(chosenEquipPickup).equipmentIndex;
-                    Log.Info($"Chosen allowed equipment: {Language.GetString(EquipmentCatalog.GetEquipmentDef(allowedEquipment).nameToken)}");
+                    Log.Info($"Chosen allowed equipment: {Language.GetString(EquipmentCatalog.GetEquipmentDef(allowedEquipment).nameToken)} (token: {EquipmentCatalog.GetEquipmentDef(allowedEquipment).nameToken})");
                 }
                 else
                 {

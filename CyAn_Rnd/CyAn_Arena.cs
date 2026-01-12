@@ -186,7 +186,11 @@ namespace CyAn_Rnd
             Inventory inv = self.inventory;
 
             // Track how many items are being added by checking the previous state (before adding new items)
-            int[] originalItemStacks = (int[])inv.itemStacks.Clone(); // Clone the current stacks for comparison later
+            List<ItemIndex> originalIndices = new List<ItemIndex>();
+            inv.permanentItemStacks.GetNonZeroIndices(originalIndices);
+            Dictionary<ItemIndex, int> originalCounts = new Dictionary<ItemIndex, int>();
+            foreach (var index in originalIndices)
+                originalCounts[index] = inv.permanentItemStacks.GetStackValue(index);
 
             //increase extraStacks by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
             int totalStacks = extraStacks;
@@ -199,7 +203,7 @@ namespace CyAn_Rnd
             if (allowDuplicates)
             {
                 //storing to be cleared items
-                int[] tempStacks = (int[])inv.itemStacks.Clone();
+                Dictionary<ItemIndex, int> tempStacks = new Dictionary<ItemIndex, int>();
                 inv.CleanInventory(); //temporarly clearing the inventory to allow orig to add all items
 
                 //call orig(self) mutliple times and clear inventory after, to make the game pull from all possible items again
@@ -209,26 +213,14 @@ namespace CyAn_Rnd
                     orig(self);
                     //gets and stores the added item
                     ItemIndex index = self.inventory.itemAcquisitionOrder[0];
-                    tempStacks[(int)index] += self.inventory.GetItemCount(index);
+                    tempStacks[index] = inv.permanentItemStacks.GetStackValue(index);
 
                     inv.CleanInventory();
-
                     self.nextItemStackIndex -= 1;
                 }
 
                 //adding the stored items back orderd by tier
-                foreach (ItemIndex index in ItemCatalog.tier1ItemList)
-                {
-                    inv.GiveItem(index, tempStacks[(int)index]);
-                }
-                foreach (ItemIndex index in ItemCatalog.tier2ItemList)
-                {
-                    inv.GiveItem(index, tempStacks[(int)index]);
-                }
-                foreach (ItemIndex index in ItemCatalog.tier3ItemList)
-                {
-                    inv.GiveItem(index, tempStacks[(int)index]);
-                }
+                foreach (var kvp in tempStacks) inv.GiveItemPermanent(kvp.Key, kvp.Value);
             }
             else
             {
@@ -242,15 +234,22 @@ namespace CyAn_Rnd
             //nextItemStackIndex sets the rarity of the ItemStack rolled for and increase by 1 after orig
             self.nextItemStackIndex += 1;
 
-            latestInventoryItems = new int[inv.itemStacks.Length];
+            // Apply multipliers using ItemCollection API
+            List<ItemIndex> currentIndices = new List<ItemIndex>();
+            inv.permanentItemStacks.GetNonZeroIndices(currentIndices);
+
+            latestInventoryItems = new int[ItemCatalog.itemCount];
             // Compare the item stacks before and after; This should work a bit more generally than just for 1 item only like the void fields, so i might do something else with it later idk
-            for (int i = 0; i < inv.itemStacks.Length; i++)
+            foreach (ItemIndex index in currentIndices)
             {
+                int currentCount = inv.permanentItemStacks.GetStackValue(index);
+                int originalCount = originalCounts.ContainsKey(index) ? originalCounts[index] : 0;
+
                 if (KillMeOption == false)
                 {
                     if (extraItems > 0)
                     {
-                        // Calculate the shrine bonus stacking, rounded down; This will only work for max ~2 Billion items, but if you manage that ingame it probably does not matter. besides Ror2 stores the items in an intArray which will have the same problem
+                        // Calculate the shrine bonus stacking, rounded down; This will only work for max ~2 Billion items, but if you manage that ingame it probably does not matter. besides Ror2 stores the items in an intArray which will have the same problem; isnt int array anymore. still ints though
                         int bonus;
                         if (useShrine) bonus = (int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems);
                         else bonus = (int)Math.Floor(DifficultyCounter * extraItems);
@@ -259,19 +258,20 @@ namespace CyAn_Rnd
                         bonus = Math.Max(bonus, 1);
 
                         // Apply the bonus to the inventory item stack
-                        if (inv.itemStacks[i] > originalItemStacks[i])
+                        if (currentCount > originalCount)
                         {
-                            inv.itemStacks[i] = originalItemStacks[i] + (inv.itemStacks[i] - originalItemStacks[i]) * bonus;
+                            int newCount = originalCount + (currentCount - originalCount) * bonus;
+                            inv.permanentItemStacks.SetStackValue(index, newCount);
                         }
                     }
                 }
                 else
                 {
-                    if (useShrine) inv.itemStacks[i] += Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
-                    else inv.itemStacks[i] += Math.Max((int)Math.Floor(DifficultyCounter * extraItems), 1);
+                    int bonus = useShrine ? Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems), 1) : Math.Max((int)Math.Floor(DifficultyCounter * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
+                    inv.permanentItemStacks.SetStackValue(index, currentCount + bonus); 
                 }
 
-                latestInventoryItems[i] = inv.itemStacks[i];
+                latestInventoryItems[(int)index] = inv.permanentItemStacks.GetStackValue(index); //i do not remember why i did this. but i updated it regardless
             }
         }
 
