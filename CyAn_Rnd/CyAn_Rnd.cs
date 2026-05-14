@@ -1177,70 +1177,31 @@ namespace CyAn_Rnd
     }
 
     //ArenaMonsterItemDropTable drop override; for when Order is active
-    [HarmonyPatch]
-    public static class Patch_AGeneratePickupFromWeightedSelection
+    [HarmonyPatch(typeof(ArenaMonsterItemDropTable), nameof(ArenaMonsterItemDropTable.PassesFilter))]
+    public static class Patch_ArenaMonsterItemDropTable_PassesFilter
     {
-        // Had Some trouble with harmony. Idk what this do but i hope it works
-        public static MethodBase TargetMethod()
+        static bool Prefix(ArenaMonsterItemDropTable __instance, PickupIndex pickupIndex, ref bool __result)
         {
-            var targetType = typeof(PickupDropTable); // use PickupDropTable because your vanilla snippet calls PickupDropTable.GeneratePickupFromWeightedSelection
-            var paramTypes = new Type[] { typeof(Xoroshiro128Plus), typeof(WeightedSelection<UniquePickup>) };
-            var m = targetType.GetMethod("GeneratePickupFromWeightedSelection", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, null, paramTypes, null);
-            if (m != null) return m;
-            // fallback: try by name only (in case signature differs)
-            m = targetType.GetMethod("GeneratePickupFromWeightedSelection", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-            return m ?? throw new MissingMethodException("Could not find GeneratePickupFromWeightedSelection on PickupDropTable");
-        }
-
-
-        public static bool Prefix(
-            ArenaMonsterItemDropTable __instance,
-            Xoroshiro128Plus rng,
-            ref UniquePickup __result)
-        {
-            if (!ArtifactOfOrder.orderActive)
-                return true; // fall back to vanilla
-
-            // Reflect private 'selector' field
-            var selectorField = typeof(ArenaMonsterItemDropTable).GetField("selector", BindingFlags.NonPublic | BindingFlags.Instance);
-            var selector = (WeightedSelection<UniquePickup>)selectorField.GetValue(__instance);
-
-            // Clear selector
-            selector.Clear();
-
-            // Add custom items
-            Add(__instance, selector, ArtifactOfOrder.originalTier1DropList, __instance.tier1Weight);
-            Add(__instance, selector, ArtifactOfOrder.originalTier2DropList, __instance.tier2Weight);
-            Add(__instance, selector, ArtifactOfOrder.originalTier3DropList, __instance.tier3Weight);
-            Add(__instance, selector, ArtifactOfOrder.originalBossDropList, __instance.bossWeight);
-            Add(__instance, selector, ArtifactOfOrder.originalLunarDropList, __instance.lunarItemWeight);
-            Add(__instance, selector, ArtifactOfOrder.originalVoidTier1DropList, __instance.voidTier1Weight);
-            Add(__instance, selector, ArtifactOfOrder.originalVoidTier2DropList, __instance.voidTier2Weight);
-            Add(__instance, selector, ArtifactOfOrder.originalVoidTier3DropList, __instance.voidTier3Weight);
-            Add(__instance, selector, ArtifactOfOrder.originalVoidBossDropList, __instance.voidBossWeight);
-
-            // Generate drop
-            __result = PickupDropTable.GeneratePickupFromWeightedSelection(rng, selector);
-            return false; // Skip original method
-        }
-
-        // Helper to call Add while accessing private methods
-        private static void Add(ArenaMonsterItemDropTable instance, WeightedSelection<UniquePickup> selector, List<PickupIndex> sourceList, float weight)
-        {
-            if (weight <= 0f || sourceList == null || sourceList.Count == 0)
-                return;
-
-            MethodInfo passesFilterMethod = typeof(ArenaMonsterItemDropTable)
-                .GetMethod("PassesFilter", BindingFlags.NonPublic | BindingFlags.Instance);
-
-            foreach (PickupIndex pickup in sourceList)
+            if (IsInOriginalLists(pickupIndex))
             {
-                bool passes = (bool)passesFilterMethod.Invoke(instance, [pickup]);
-                if (passes)
-                {
-                    selector.AddChoice(new UniquePickup(pickup), weight);
-                }
+                __result = true;
+                return false;
             }
+
+            return true;
+        }
+
+        static bool IsInOriginalLists(PickupIndex pickupIndex)
+        {
+            return ArtifactOfOrder.originalTier1DropList != null && ArtifactOfOrder.originalTier1DropList.Contains(pickupIndex)
+                || ArtifactOfOrder.originalTier2DropList != null && ArtifactOfOrder.originalTier2DropList.Contains(pickupIndex)
+                || ArtifactOfOrder.originalTier3DropList != null && ArtifactOfOrder.originalTier3DropList.Contains(pickupIndex)
+                || ArtifactOfOrder.originalBossDropList != null && ArtifactOfOrder.originalBossDropList.Contains(pickupIndex)
+                || ArtifactOfOrder.originalLunarDropList != null && ArtifactOfOrder.originalLunarDropList.Contains(pickupIndex)
+                || ArtifactOfOrder.originalVoidTier1DropList != null && ArtifactOfOrder.originalVoidTier1DropList.Contains(pickupIndex)
+                || ArtifactOfOrder.originalVoidTier2DropList != null && ArtifactOfOrder.originalVoidTier2DropList.Contains(pickupIndex)
+                || ArtifactOfOrder.originalVoidTier3DropList != null && ArtifactOfOrder.originalVoidTier3DropList.Contains(pickupIndex)
+                || ArtifactOfOrder.originalVoidBossDropList != null && ArtifactOfOrder.originalVoidBossDropList.Contains(pickupIndex);
         }
     }
 }
