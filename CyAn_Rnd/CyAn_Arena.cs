@@ -121,14 +121,14 @@ namespace CyAn_Rnd
             }
 
             int total;
-            if (useShrine) total = Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
+            if (useShrine) total = Math.Max((int)Math.Floor(Run.instance.prestiegeArtifactMountainValue * extraRewards), 1);//if you are confused what this does check the code for the enemy items (extraItems), its the same thing just better explained
             else total = Math.Max((int)Math.Floor(DifficultyCounter * extraRewards), 1);
 
 
             if (CyAn_Rnd.preventDrops)
             {
                 int playerIndex = CyAn_Rnd.GetPlayerIndexFromInteractionObject(self.gameObject);
-                CyAn_Rnd.AddToPlayerInventory(pickupIndex.pickupDef.itemIndex, playerIndex, total);
+                CyAn_Rnd.AddToPlayerInventory(new UniquePickup(pickupIndex), playerIndex, total);
             }
             else
             {
@@ -167,7 +167,7 @@ namespace CyAn_Rnd
             if (stageIncrease > 0)
             {
                 int diffCounter;
-                if (useShrine) diffCounter = TeleporterInteraction.instance.shrineBonusStacks;
+                if (useShrine) diffCounter = Run.instance.prestiegeArtifactMountainValue;
                 else diffCounter = DifficultyCounter;
                 Run.instance.stageClearCount += (int)Math.Floor(stageIncrease * diffCounter);
             }
@@ -186,9 +186,9 @@ namespace CyAn_Rnd
             Inventory inv = self.inventory;
 
             // Track how many items are being added by checking the previous state (before adding new items)
-            List<ItemIndex> originalIndices = new List<ItemIndex>();
+            List<ItemIndex> originalIndices = [];
             inv.permanentItemStacks.GetNonZeroIndices(originalIndices);
-            Dictionary<ItemIndex, int> originalCounts = new Dictionary<ItemIndex, int>();
+            Dictionary<ItemIndex, int> originalCounts = [];
             foreach (var index in originalIndices)
                 originalCounts[index] = inv.permanentItemStacks.GetStackValue(index);
 
@@ -196,14 +196,14 @@ namespace CyAn_Rnd
             int totalStacks = extraStacks;
             if (extraStacksThreshold > 0)
             {
-                if (useShrine) totalStacks += TeleporterInteraction.instance.shrineBonusStacks / extraStacksThreshold;
+                if (useShrine) totalStacks += Run.instance.prestiegeArtifactMountainValue / extraStacksThreshold;
                 else totalStacks += DifficultyCounter / extraStacksThreshold;
             }
 
             if (allowDuplicates)
             {
                 //storing to be cleared items
-                Dictionary<ItemIndex, int> tempStacks = new Dictionary<ItemIndex, int>();
+                Dictionary<ItemIndex, int> tempStacks = [];
                 inv.CleanInventory(); //temporarly clearing the inventory to allow orig to add all items
 
                 //call orig(self) mutliple times and clear inventory after, to make the game pull from all possible items again
@@ -235,7 +235,7 @@ namespace CyAn_Rnd
             self.nextItemStackIndex += 1;
 
             // Apply multipliers using ItemCollection API
-            List<ItemIndex> currentIndices = new List<ItemIndex>();
+            List<ItemIndex> currentIndices = [];
             inv.permanentItemStacks.GetNonZeroIndices(currentIndices);
 
             latestInventoryItems = new int[ItemCatalog.itemCount];
@@ -251,7 +251,7 @@ namespace CyAn_Rnd
                     {
                         // Calculate the shrine bonus stacking, rounded down; This will only work for max ~2 Billion items, but if you manage that ingame it probably does not matter. besides Ror2 stores the items in an intArray which will have the same problem; isnt int array anymore. still ints though
                         int bonus;
-                        if (useShrine) bonus = (int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems);
+                        if (useShrine) bonus = (int)Math.Floor(Run.instance.prestiegeArtifactMountainValue * extraItems);
                         else bonus = (int)Math.Floor(DifficultyCounter * extraItems);
 
                         // Ensure the enmies get at least 1 item
@@ -267,7 +267,7 @@ namespace CyAn_Rnd
                 }
                 else
                 {
-                    int bonus = useShrine ? Math.Max((int)Math.Floor(TeleporterInteraction.instance.shrineBonusStacks * extraItems), 1) : Math.Max((int)Math.Floor(DifficultyCounter * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
+                    int bonus = useShrine ? Math.Max((int)Math.Floor(Run.instance.prestiegeArtifactMountainValue * extraItems), 1) : Math.Max((int)Math.Floor(DifficultyCounter * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
                     inv.permanentItemStacks.SetStackValue(index, currentCount + bonus); 
                 }
 
@@ -288,7 +288,7 @@ namespace CyAn_Rnd
             int total = extraMonsterTypes;//'extra' MonsterTypes is at least 1
             if (extraMonsterTypesThreshold > 0)
             {
-                if (useShrine) total += TeleporterInteraction.instance.shrineBonusStacks / extraMonsterTypesThreshold;
+                if (useShrine) total += Run.instance.prestiegeArtifactMountainValue / extraMonsterTypesThreshold;
                 else total += DifficultyCounter / extraMonsterTypesThreshold;
             }
 
@@ -318,7 +318,7 @@ namespace CyAn_Rnd
         public static CombatDirector NewCombatDirector(CombatDirector referenceDirector)
         {
 
-            GameObject newCombatDirectorObject = new GameObject("ArenaMissionController");
+            GameObject newCombatDirectorObject = new("ArenaMissionController");
 
             // Add the CombatDirector component to the new GameObject.
             newCombatDirectorObject.SetActive(false); //directly adding causes an error the Ror2.CombatDirector.Awake() method so i have to disably it until i added all the reference variables (some of them may be overrriden or set differently actually but i do not know what awake does exactly, so i just copied everything i could)
@@ -378,8 +378,8 @@ namespace CyAn_Rnd
 
         public void RemoveMatchingMonsterCards(ArenaMissionController controller)
         {
-            List<int> toBeRemovedIndices = new List<int>();
-            String[] BlacklistUsables = { }; //empty array as default so that even if an error occurs it will just act as if there is no blacklist
+            List<int> toBeRemovedIndices = [];
+            String[] BlacklistUsables = []; //empty array as default so that even if an error occurs it will just act as if there is no blacklist
 
             //if the monsterBlackList just skip
             if (monsterBlacklist.Equals("")) return;
@@ -436,7 +436,7 @@ namespace CyAn_Rnd
             currentCell = -1; //reset current Cell counter; example use in 'ActivateCell' and 'ZoneCharge' [-1 because it does +1 always and 0-index]
             DifficultyCounter = 0; //reset DifficultyCounter even tough it may not be used depening on choosen options
 
-            ArenaMissionController controller = UnityEngine.Object.FindObjectOfType<ArenaMissionController>();
+            ArenaMissionController controller = UnityEngine.Object.FindFirstObjectByType<ArenaMissionController>();
             //non-host check
             if (controller == null)
             {
@@ -452,26 +452,42 @@ namespace CyAn_Rnd
                 //adding the stored items back orderd by tier
                 foreach (ItemIndex index in ItemCatalog.tier1ItemList)
                 {
-                    inv.GiveItem(index, latestInventoryItems[(int)index]);
+                    inv.GiveItemPermanent(index, latestInventoryItems[(int)index]);
                 }
                 foreach (ItemIndex index in ItemCatalog.tier2ItemList)
                 {
-                    inv.GiveItem(index, latestInventoryItems[(int)index]);
+                    inv.GiveItemPermanent(index, latestInventoryItems[(int)index]);
                 }
                 foreach (ItemIndex index in ItemCatalog.tier3ItemList)
                 {
-                    inv.GiveItem(index, latestInventoryItems[(int)index]);
+                    inv.GiveItemPermanent(index, latestInventoryItems[(int)index]);
                 }
             }
 
             if (useShrine)
             {
-                //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
-                GameObject portal = UnityEngine.Object.Instantiate(CyAn_Rnd.teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
-                                                                                                                  //btw i do not sync portal to client, which i had to do for the null portal, but its supposed to be inaccesible anyway, so that should be fine
+                //[Deprecated] with the new shrine artifact for the base game; we will use the base game counter instead
+                    //the 'arena' also known as the void fields, does not have a teleporter, but i want to activate mountain shrines anyway
+                    //UnityEngine.Object.Instantiate(CyAn_Rnd.teleporterPrefab, new Vector3(0, -1000, 0), Quaternion.identity); // I hope -1000 is away from everything/unreachable
+                    //btw i do not sync portal to client, which i had to do for the null portal, but its supposed to be inaccesible anyway, so that should be fine
 
-                //Allow time for other mods to add shrines on stage start
-                controller.StartCoroutine(AddShrinesDelay(controller));
+                    //Allow time for other mods to add shrines on stage start
+                    //controller.StartCoroutine(AddShrinesDelay(controller));
+
+                int toAdd = numShrines * arenaCount;
+
+                if (expScaling && toAdd > 0)
+                {
+                    if (Run.instance.prestiegeArtifactMountainValue <= 0)
+                    {
+                        Run.instance.prestiegeArtifactMountainValue += 1;
+                        toAdd -= 1;
+                    }
+                    toAdd = (int)(Run.instance.prestiegeArtifactMountainValue * Math.Pow(2.0, toAdd)) - Run.instance.prestiegeArtifactMountainValue;
+                }
+                Run.instance.prestiegeArtifactMountainValue += toAdd;
+
+                controller.baseMonsterCredit += extraMonsterCredits * Run.instance.prestiegeArtifactMountainValue;
             }
             else //we do not need a portal now, and the shrines are replaces by DifficultyCounter
             {
@@ -509,7 +525,7 @@ namespace CyAn_Rnd
             yield return new WaitForSeconds(1f);
 
             // check all gamebojects because this way was easiest, probably improvable
-            GameObject[] obj = UnityEngine.Object.FindObjectsOfType<GameObject>();
+            GameObject[] obj = UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             bool found = false;
 
             foreach (GameObject portal in obj)
@@ -530,6 +546,7 @@ namespace CyAn_Rnd
             }
         }
         
+        /* [Deprecated] ill leave this here for now in case the logic breaks as a reference
         private IEnumerator AddShrinesDelay(ArenaMissionController controller)
         {
             yield return new WaitForSeconds(0.1f);
@@ -552,7 +569,7 @@ namespace CyAn_Rnd
             //adding the extra Credits from the config
             controller.baseMonsterCredit += extraMonsterCredits * TeleporterInteraction.instance.shrineBonusStacks;
 
-        }
+        }*/
 
         public static void RecieveData(CyAn_Network data)
         {

@@ -15,7 +15,6 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.Networking;
-using static RoR2.PickupPickerController;
 
 namespace CyAn_Rnd
 {
@@ -31,7 +30,7 @@ namespace CyAn_Rnd
         public const string PluginGUID = "Cyan.Rnd";
         public const string PluginAuthor = "Cy/an";
         public const string PluginName = "Cy/an Rnd";
-        public const string PluginVersion = "1.2.3";
+        public const string PluginVersion = "1.2.5";
 
         //shopPortal is not neccessary anymore but ill leave it to reuse use when testing
         public static GameObject shopPortalPrefab;
@@ -62,7 +61,7 @@ namespace CyAn_Rnd
         private static readonly CyAn_Arena CyAn_Arena =  new();
 
         //Artifact stuff
-        private readonly List<CyAn_RndArtifactBase> artifacts = new();
+        private readonly List<CyAn_RndArtifactBase> artifacts = [];
 
         // The Awake() method is run at the very start when the game is initialized.
         public void Awake()
@@ -129,14 +128,14 @@ namespace CyAn_Rnd
             void SaveToProperSave(Dictionary<String, object> dictionary)
             {
                 // Create a combined array. ProperSave readme said to best to only save on thing (/combined thing)
-                object[] saveData = new object[]
-                {
+                object[] saveData =
+                [
                     CyAn_Arena.latestInventoryItems,
                     CyAn_Arena.arenaCount,
                     currentPlayer,
                     ArtifactOfOrder.tierToItemMap.Select(kvp => new KeyValuePair<int, int>((int)kvp.Key, (int)kvp.Value)).ToList(),
                     (int)ArtifactOfOrder.allowedEquipment
-                };
+                ];
 
                 //there was some error when i used my GUID, either i made a mistake or it was the '.' so I removed it
                 dictionary["CyanRnd"] = saveData;
@@ -156,7 +155,7 @@ namespace CyAn_Rnd
                     try
                     {
                         // Casts loadedData[0](object) to List<object> and converts this to int[](by casting it to List<int> and then converting to array._.) because of course i can't just cast to (int[])
-                        CyAn_Arena.latestInventoryItems = ((List<object>)loadedData[0]).Cast<int>().ToArray();
+                        CyAn_Arena.latestInventoryItems = [.. ((List<object>)loadedData[0]).Cast<int>()];
                     }
                     catch (Exception ex)
                     {
@@ -666,11 +665,11 @@ namespace CyAn_Rnd
 
         private GenericPickupController AddItemDirectly(On.RoR2.GenericPickupController.orig_CreatePickup orig, ref GenericPickupController.CreatePickupInfo createPickupInfo)
         {
-            PickupDef item = createPickupInfo.pickupIndex.pickupDef;
+            PickupDef item = createPickupInfo.pickup.pickupIndex.pickupDef;
             if (preventLunar && item.itemTier == ItemTier.Lunar) return orig(ref createPickupInfo);
             if (preventDrops && item.itemIndex != ItemIndex.None)
             {
-                AddToPlayerInventory(item.itemIndex);
+                AddToPlayerInventory(createPickupInfo.pickup);
                 return null;
             }
             return orig(ref createPickupInfo);
@@ -679,7 +678,7 @@ namespace CyAn_Rnd
         //this creates droplet objects which then turn into items, but thousands of them cause too much lag
         private void AddDropletDirectly(On.RoR2.PickupDropletController.orig_CreatePickupDroplet_CreatePickupInfo_Vector3_Vector3 orig, GenericPickupController.CreatePickupInfo pickupInfo, Vector3 position, Vector3 velocity)
         {
-            PickupDef item = pickupInfo.pickupIndex.pickupDef;
+            PickupDef item = PickupCatalog.GetPickupDef(pickupInfo.pickup.pickupIndex);
             if (preventLunar && item.itemTier == ItemTier.Lunar)
             {
                 orig(pickupInfo, position, velocity);
@@ -699,11 +698,11 @@ namespace CyAn_Rnd
             if (smallestDistance <= 26f) //i tried 8f before but both ChanceShrine(18.+) and triple shop(20.+) were to faar away; MultiShopLarge was 25.96055, always... (why is it different to the multishop, who knows; i still do not have a grasp on how far 1 unit is so idk if thats too far at this point, but i hope its fine)
             {
                 int index = GetPlayerIndexFromInteractionObject(smoll);
-                AddToPlayerInventory(item.itemIndex, index);
+                AddToPlayerInventory(pickupInfo.pickup, index);
                 return;
             }
 
-            AddToPlayerInventory(item.itemIndex);
+            AddToPlayerInventory(pickupInfo.pickup);
         }
 
         private void Purchase(On.RoR2.PurchaseInteraction.orig_OnInteractionBegin orig, PurchaseInteraction self, Interactor activator)
@@ -838,7 +837,7 @@ namespace CyAn_Rnd
                 wasLoaded = false;
                 return;
             }
-            CyAn_Arena.latestInventoryItems = new int[0];
+            CyAn_Arena.latestInventoryItems = [];
             CyAn_Arena.arenaCount = -1;
             orig(self);
         }
@@ -867,13 +866,12 @@ namespace CyAn_Rnd
         private void RePopulateInteractList()
         {
             purchaseInteractables.Clear();
-            GameObject[] allGameObjects = FindObjectsOfType<GameObject>();
+            GameObject[] allGameObjects = FindObjectsByType<GameObject>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
 
             //trying to get the objects that spawn items and hold who interacted with them which was more complicated before i had the very smart idea to directly check the relevant component
-            purchaseInteractables = allGameObjects
+            purchaseInteractables = [.. allGameObjects
             .Where(obj => obj.GetComponent<PurchaseInteraction>() != null || obj.GetComponent<ScrapperController>() != null)
-            .Distinct()
-            .ToList();
+            .Distinct()];
         }
 
         public static int GetPlayerIndexFromInteractionObject(GameObject Object)
@@ -939,7 +937,7 @@ namespace CyAn_Rnd
         }
 
         [Server]
-        public static void AddToPlayerInventory(ItemIndex item, int target = -1, int total = 1)
+        public static void AddToPlayerInventory(UniquePickup pickup, int target = -1, int total = 1)
         {
             if (target == -1)
             {
@@ -958,17 +956,31 @@ namespace CyAn_Rnd
 
             NetworkUser user = NetworkUser.readOnlyInstancesList[target];
             CharacterMaster master = user.master;
-            CyAn_Network networkItem = new(item); //this is some network vodoo in my opinion
+            CyAn_Network networkItem = new(pickup); //this is some network vodoo in my opinion
 
             if (master == null)
             {
-                Log.Error($"Could not find Master for '{user}' default sending {item} to host");
+                Log.Error($"Could not find Master for '{user}' default sending {pickup} to host");
 
                 NetworkServer.SendToClient(0, networkId, networkItem);
                 return;
             }
 
-            master.inventory.GiveItem(item, total);
+            //[deprecated] master.inventory.GiveItem(pickup, total);
+            Inventory inventory = master.inventory;
+            ItemIndex item = PickupCatalog.GetPickupDef(pickup.pickupIndex).itemIndex;
+
+            if (pickup.isTempItem)
+            {
+                for (int i = 0; i < total; i++)
+                {
+                    inventory.GiveItemTemp(item, pickup.decayValue);
+                }
+            }
+            else
+            {
+                inventory.GiveItemPermanent(item, total);
+            }
 
             NetworkServer.SendToClient(target, networkId, networkItem);
             currentPlayer++;
@@ -998,7 +1010,7 @@ namespace CyAn_Rnd
                 CyAn_Arena.RecieveData(data);
                 return;
             }
-            ItemIndex item = data.Item;
+            ItemIndex item = PickupCatalog.GetPickupDef(data.Item.pickupIndex).itemIndex;
             PlayerCharacterMasterController localPlayer = PlayerCharacterMasterController.instances.FirstOrDefault(x => x.networkUser.isLocalPlayer);
 
             if (localPlayer == null)
@@ -1015,9 +1027,9 @@ namespace CyAn_Rnd
             NetworkServer.Spawn(obj); //this should sync the object to all
         }
 
-        private void Update()
+        /*private void Update()
         {
-            /*if (Input.GetKeyDown(KeyCode.F2))
+            if (Input.GetKeyDown(KeyCode.F2))
             {
                 // Get the player body to use a position:
                 var player = PlayerCharacterMasterController.instances[0];
@@ -1037,7 +1049,7 @@ namespace CyAn_Rnd
                     HoldoutZoneController zone = obj.GetComponent<HoldoutZoneController>();
                     Log.Info(zone.charge);
                 }
-            }*/
+            }
         }
 
         private void ForceSpawnPortal(Vector3 position)
@@ -1045,26 +1057,24 @@ namespace CyAn_Rnd
             // Instantiate the portal prefab at the specified position
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
-        }
+        }*/
 
         public static Sprite LoadEmbeddedSprite(string resourceName)
         {
             var assembly = Assembly.GetExecutingAssembly();
-            using (Stream stream = assembly.GetManifestResourceStream(resourceName))
+            using Stream stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream == null)
             {
-                if (stream == null)
-                {
-                    Log.Error($"[ArtifactOfOrder] Embedded resource not found: {resourceName}");
-                    return null;
-                }
-
-                byte[] data = new byte[stream.Length];
-                stream.Read(data, 0, data.Length);
-
-                Texture2D tex = new Texture2D(2, 2);
-                tex.LoadImage(data);
-                return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                Log.Error($"[ArtifactOfOrder] Embedded resource not found: {resourceName}");
+                return null;
             }
+
+            byte[] data = new byte[stream.Length];
+            stream.Read(data, 0, data.Length);
+
+            Texture2D tex = new(2, 2);
+            tex.LoadImage(data);
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
         }
 
         private static void CheatUnlockAllItemsAndSurvivors()
@@ -1167,20 +1177,33 @@ namespace CyAn_Rnd
     }
 
     //ArenaMonsterItemDropTable drop override; for when Order is active
-    [HarmonyPatch(typeof(ArenaMonsterItemDropTable), nameof(ArenaMonsterItemDropTable.GenerateDropPreReplacement))]
-    public static class Patch_ArenaMonsterItemDropTable_GenerateDrop
+    [HarmonyPatch]
+    public static class Patch_AGeneratePickupFromWeightedSelection
     {
+        // Had Some trouble with harmony. Idk what this do but i hope it works
+        public static MethodBase TargetMethod()
+        {
+            var targetType = typeof(PickupDropTable); // use PickupDropTable because your vanilla snippet calls PickupDropTable.GeneratePickupFromWeightedSelection
+            var paramTypes = new Type[] { typeof(Xoroshiro128Plus), typeof(WeightedSelection<UniquePickup>) };
+            var m = targetType.GetMethod("GeneratePickupFromWeightedSelection", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, null, paramTypes, null);
+            if (m != null) return m;
+            // fallback: try by name only (in case signature differs)
+            m = targetType.GetMethod("GeneratePickupFromWeightedSelection", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            return m ?? throw new MissingMethodException("Could not find GeneratePickupFromWeightedSelection on PickupDropTable");
+        }
+
+
         public static bool Prefix(
             ArenaMonsterItemDropTable __instance,
             Xoroshiro128Plus rng,
-            ref PickupIndex __result)
+            ref UniquePickup __result)
         {
             if (!ArtifactOfOrder.orderActive)
                 return true; // fall back to vanilla
 
             // Reflect private 'selector' field
             var selectorField = typeof(ArenaMonsterItemDropTable).GetField("selector", BindingFlags.NonPublic | BindingFlags.Instance);
-            var selector = (WeightedSelection<PickupIndex>)selectorField.GetValue(__instance);
+            var selector = (WeightedSelection<UniquePickup>)selectorField.GetValue(__instance);
 
             // Clear selector
             selector.Clear();
@@ -1197,23 +1220,25 @@ namespace CyAn_Rnd
             Add(__instance, selector, ArtifactOfOrder.originalVoidBossDropList, __instance.voidBossWeight);
 
             // Generate drop
-            __result = PickupDropTable.GenerateDropFromWeightedSelection(rng, selector);
+            __result = PickupDropTable.GeneratePickupFromWeightedSelection(rng, selector);
             return false; // Skip original method
         }
 
         // Helper to call Add while accessing private methods
-        private static void Add(ArenaMonsterItemDropTable instance, WeightedSelection<PickupIndex> selector, List<PickupIndex> sourceList, float weight)
+        private static void Add(ArenaMonsterItemDropTable instance, WeightedSelection<UniquePickup> selector, List<PickupIndex> sourceList, float weight)
         {
             if (weight <= 0f || sourceList == null || sourceList.Count == 0)
                 return;
 
-            MethodInfo passesFilterMethod = typeof(ArenaMonsterItemDropTable).GetMethod("PassesFilter", BindingFlags.NonPublic | BindingFlags.Instance);
+            MethodInfo passesFilterMethod = typeof(ArenaMonsterItemDropTable)
+                .GetMethod("PassesFilter", BindingFlags.NonPublic | BindingFlags.Instance);
+
             foreach (PickupIndex pickup in sourceList)
             {
-                bool passes = (bool)passesFilterMethod.Invoke(instance, new object[] { pickup });
+                bool passes = (bool)passesFilterMethod.Invoke(instance, [pickup]);
                 if (passes)
                 {
-                    selector.AddChoice(pickup, weight);
+                    selector.AddChoice(new UniquePickup(pickup), weight);
                 }
             }
         }

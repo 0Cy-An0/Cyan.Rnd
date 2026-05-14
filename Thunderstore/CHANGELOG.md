@@ -1,3 +1,6 @@
+## 1.2.5
+- better integratation of the mod with the newest version of the game
+
 ## 1.2.4
 - updated for Alloyed Collective (mod now loads again)
 

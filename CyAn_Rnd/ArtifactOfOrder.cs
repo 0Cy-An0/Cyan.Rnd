@@ -2,7 +2,6 @@ using BepInEx.Configuration;
 using RoR2;
 using System.Collections.Generic;
 using UnityEngine;
-using static RoR2.GenericPickupController;
 
 namespace CyAn_Rnd
 {
@@ -17,7 +16,7 @@ namespace CyAn_Rnd
 
         public override Sprite ArtifactDisabledIcon => CyAn_Rnd.LoadEmbeddedSprite("CyAn_Rnd.Resources.order_disabled.png");
 
-        public static Dictionary<ItemTier, ItemIndex> tierToItemMap = new();
+        public static Dictionary<ItemTier, ItemIndex> tierToItemMap = [];
 
         public static EquipmentIndex allowedEquipment = EquipmentIndex.None;
 
@@ -55,18 +54,18 @@ namespace CyAn_Rnd
 
         private void SaveOriginalDropLists(Run run)
         {
-            originalTier1DropList = new List<PickupIndex>(run.availableTier1DropList);
-            originalTier2DropList = new List<PickupIndex>(run.availableTier2DropList);
-            originalTier3DropList = new List<PickupIndex>(run.availableTier3DropList);
-            originalBossDropList = new List<PickupIndex>(run.availableBossDropList);
-            originalLunarDropList = new List<PickupIndex>(run.availableLunarItemDropList);
-            originalVoidTier1DropList = new List<PickupIndex>(run.availableVoidTier1DropList);
-            originalVoidTier2DropList = new List<PickupIndex>(run.availableVoidTier2DropList);
-            originalVoidTier3DropList = new List<PickupIndex>(run.availableVoidTier3DropList);
-            originalVoidBossDropList = new List<PickupIndex>(run.availableVoidBossDropList);
+            originalTier1DropList = [.. run.availableTier1DropList];
+            originalTier2DropList = [.. run.availableTier2DropList];
+            originalTier3DropList = [.. run.availableTier3DropList];
+            originalBossDropList = [.. run.availableBossDropList];
+            originalLunarDropList = [.. run.availableLunarItemDropList];
+            originalVoidTier1DropList = [.. run.availableVoidTier1DropList];
+            originalVoidTier2DropList = [.. run.availableVoidTier2DropList];
+            originalVoidTier3DropList = [.. run.availableVoidTier3DropList];
+            originalVoidBossDropList = [.. run.availableVoidBossDropList];
 
-            originalEquipmentDropList = new List<PickupIndex>(run.availableEquipmentDropList);
-            originalLunarEquipmentDropList = new List<PickupIndex>(run.availableLunarEquipmentDropList);
+            originalEquipmentDropList = [.. run.availableEquipmentDropList];
+            originalLunarEquipmentDropList = [.. run.availableLunarEquipmentDropList];
         }
 
         private void ModifyItemDropTables(Run run)
@@ -93,7 +92,7 @@ namespace CyAn_Rnd
                 { ItemTier.VoidBoss, new List<PickupIndex>(run.availableVoidBossDropList) }
             };
 
-            List<PickupIndex> equipmentPickups = new(run.availableEquipmentDropList);
+            List<PickupIndex> equipmentPickups = [.. run.availableEquipmentDropList];
             equipmentPickups.AddRange(run.availableLunarEquipmentDropList);
             var eqIndex = EquipmentCatalog.FindEquipmentIndex("Recycler");
             if (eqIndex != EquipmentIndex.None)
@@ -220,7 +219,7 @@ namespace CyAn_Rnd
             //For some reason, im very mad about; if its loaded via ProperSave the older foreach loop over just the inventory is just the same useless info; so well have to do this; i hope it doesnt lag (but it shouldnt)
             foreach (ItemIndex itemIndex in ItemCatalog.allItems)
             {
-                int count = inventory.GetItemCount(itemIndex);
+                int count = inventory.GetItemCountPermanent(itemIndex);
                 if (count <= 0) continue;
 
                 ItemDef itemDef = ItemCatalog.GetItemDef(itemIndex);
@@ -230,8 +229,8 @@ namespace CyAn_Rnd
 
                 if (tierToItemMap.TryGetValue(itemDef.tier, out ItemIndex replacementItem))
                 {
-                    inventory.RemoveItem(itemIndex, count);
-                    inventory.GiveItem(replacementItem, count);
+                    inventory.RemoveItemPermanent(itemIndex, count);
+                    inventory.GiveItemPermanent(replacementItem, count);
                     Log.Info($"Replaced {Language.GetString(itemDef.nameToken)} with {Language.GetString(ItemCatalog.GetItemDef(replacementItem).nameToken)}");
                 }
                 else
@@ -246,12 +245,12 @@ namespace CyAn_Rnd
 
                 for (uint slot = 0; slot < slotCount; slot++)
                 {
-                    EquipmentDef currentEquipmentDef = EquipmentCatalog.GetEquipmentDef(inventory.GetEquipment(slot).equipmentIndex);
+                    EquipmentDef currentEquipmentDef = EquipmentCatalog.GetEquipmentDef(inventory.GetActiveEquipment().equipmentIndex);
 
-                    if (currentEquipmentDef != null && inventory.GetEquipment(slot).equipmentIndex != allowedEquipment)
+                    if (currentEquipmentDef != null && inventory.GetActiveEquipment().equipmentIndex != allowedEquipment)
                     {
                         Log.Info($"Replacing equipment: {currentEquipmentDef.name} with {EquipmentCatalog.GetEquipmentDef(allowedEquipment).name}");
-                        inventory.SetEquipmentIndex(allowedEquipment);
+                        inventory.SetEquipmentIndex(allowedEquipment, false);
                     }
                 }
             }

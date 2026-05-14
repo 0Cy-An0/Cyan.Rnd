@@ -2,7 +2,6 @@ using BepInEx.Configuration;
 using RoR2;
 using R2API;
 using UnityEngine;
-using IL.RoR2.ContentManagement;
 
 namespace CyAn_Rnd
 {

@@ -6,12 +6,12 @@ namespace CyAn_Rnd
     public class CyAn_Network : MessageBase
     {
         public int MsgType { get; private set; }
-        public ItemIndex Item { get; private set; }
+        public UniquePickup Item { get; private set; }
         public float CellZoneSize { get; private set; }
 
         public CyAn_Network() { } //this was present in the reference i used so i am using this too. I have no idea how networking stuff works, but it would not work any other way i tried (been 3 days at this point) so yeah
 
-        public CyAn_Network(ItemIndex passItem)
+        public CyAn_Network(UniquePickup passItem)
         {
             MsgType = 0;
             Item = passItem;
@@ -48,7 +48,7 @@ namespace CyAn_Rnd
             switch (MsgType)
             {
                 case 0: // Item message
-                    Item = reader.ReadItemIndex();
+                    Item = reader.ReadUniquePickup();
                     break;
 
                 case 1: // Size message
