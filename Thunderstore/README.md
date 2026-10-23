@@ -6,6 +6,7 @@ Does Random stuff I wanted to have in the game:
  - Option to remove all Highlights (Logbook/Character Select)
  - Option to enable Crit stacking past 100% and how (if next crit should only roll for a mult increase of +1 or *2)
  - Option to enable Bleed stacking past 100%
+ - Option to fast start the game. with a chosen amount of random items on a chosen stage number and chosen start time
 
  - Void Field portal is usable more than once (fields configurable via Config)
     - Monster inherit Items from previous Void Field stages

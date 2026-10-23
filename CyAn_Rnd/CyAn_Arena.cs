@@ -189,8 +189,18 @@ namespace CyAn_Rnd
             List<ItemIndex> originalIndices = [];
             inv.permanentItemStacks.GetNonZeroIndices(originalIndices);
             Dictionary<ItemIndex, int> originalCounts = [];
-            foreach (var index in originalIndices)
-                originalCounts[index] = inv.permanentItemStacks.GetStackValue(index);
+            foreach (var index in originalIndices) originalCounts[index] = inv.permanentItemStacks.GetStackValue(index);
+
+            if (KillMeOption == true)
+            {
+                int bonus = useShrine ? Math.Max((int)Math.Floor(Run.instance.prestiegeArtifactMountainValue * extraItems), 1) : Math.Max((int)Math.Floor(DifficultyCounter * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
+                foreach (ItemIndex index in ItemCatalog.allItems)
+                {
+                    if (index == ItemIndex.None) continue;
+                    inv.permanentItemStacks.Add(index, bonus);
+                }
+                return;
+            }
 
             //increase extraStacks by how many times the Threshold was reached; reminder that this is a int div; 0 should be disable
             int totalStacks = extraStacks;
@@ -213,7 +223,7 @@ namespace CyAn_Rnd
                     orig(self);
                     //gets and stores the added item
                     ItemIndex index = self.inventory.itemAcquisitionOrder[0];
-                    tempStacks[index] = inv.permanentItemStacks.GetStackValue(index);
+                    tempStacks[index] = inv.permanentItemStacks.GetStackValue(index) + tempStacks.GetValueOrDefault(index, 0);
 
                     inv.CleanInventory();
                     self.nextItemStackIndex -= 1;
@@ -221,6 +231,7 @@ namespace CyAn_Rnd
 
                 //adding the stored items back orderd by tier
                 foreach (var kvp in tempStacks) inv.GiveItemPermanent(kvp.Key, kvp.Value);
+                foreach (var kvp in originalCounts) inv.GiveItemPermanent(kvp.Key, kvp.Value);
             }
             else
             {
@@ -240,38 +251,29 @@ namespace CyAn_Rnd
 
             latestInventoryItems = new int[ItemCatalog.itemCount];
             // Compare the item stacks before and after; This should work a bit more generally than just for 1 item only like the void fields, so i might do something else with it later idk
-            foreach (ItemIndex index in currentIndices)
-            {
-                int currentCount = inv.permanentItemStacks.GetStackValue(index);
-                int originalCount = originalCounts.ContainsKey(index) ? originalCounts[index] : 0;
-
-                if (KillMeOption == false)
+            if (extraItems > 0) {
+                foreach (ItemIndex index in currentIndices)
                 {
-                    if (extraItems > 0)
+                    int currentCount = inv.permanentItemStacks.GetStackValue(index);
+                    int originalCount = originalCounts.ContainsKey(index) ? originalCounts[index] : 0;
+
+                    // Calculate the shrine bonus stacking, rounded down; This will only work for max ~2 Billion items, but if you manage that ingame it probably does not matter. besides Ror2 stores the items in an intArray which will have the same problem; isnt int array anymore. still ints though
+                    int bonus;
+                    if (useShrine) bonus = (int)Math.Floor(Run.instance.prestiegeArtifactMountainValue * extraItems);
+                    else bonus = (int)Math.Floor(DifficultyCounter * extraItems);
+
+                    // Ensure the enmies get at least 1 item
+                    bonus = Math.Max(bonus, 1);
+
+                    // Apply the bonus to the inventory item stack
+                    if (currentCount > originalCount)
                     {
-                        // Calculate the shrine bonus stacking, rounded down; This will only work for max ~2 Billion items, but if you manage that ingame it probably does not matter. besides Ror2 stores the items in an intArray which will have the same problem; isnt int array anymore. still ints though
-                        int bonus;
-                        if (useShrine) bonus = (int)Math.Floor(Run.instance.prestiegeArtifactMountainValue * extraItems);
-                        else bonus = (int)Math.Floor(DifficultyCounter * extraItems);
-
-                        // Ensure the enmies get at least 1 item
-                        bonus = Math.Max(bonus, 1);
-
-                        // Apply the bonus to the inventory item stack
-                        if (currentCount > originalCount)
-                        {
-                            int newCount = originalCount + (currentCount - originalCount) * bonus;
-                            inv.permanentItemStacks.SetStackValue(index, newCount);
-                        }
+                        int newCount = originalCount + (currentCount - originalCount) * bonus;
+                        inv.permanentItemStacks.SetStackValue(index, newCount);
                     }
-                }
-                else
-                {
-                    int bonus = useShrine ? Math.Max((int)Math.Floor(Run.instance.prestiegeArtifactMountainValue * extraItems), 1) : Math.Max((int)Math.Floor(DifficultyCounter * extraItems), 1); //should add the floor of extraItems min 1, to all items available in inventory
-                    inv.permanentItemStacks.SetStackValue(index, currentCount + bonus); 
-                }
 
-                latestInventoryItems[(int)index] = inv.permanentItemStacks.GetStackValue(index); //i do not remember why i did this. but i updated it regardless
+                    latestInventoryItems[(int)index] = inv.permanentItemStacks.GetStackValue(index); //i do not remember why i did this. but i updated it regardless
+                }
             }
         }
 

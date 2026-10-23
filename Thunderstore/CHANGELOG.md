@@ -1,3 +1,8 @@
+## 1.3.0
+- added fast start options to start the game in the middle of a run
+- updated properSave integration (will break old save files)
+- fixed modified item behaviour in the void fields when "allowed multiple items" or "Kill me" was toggled
+
 ## 1.2.5
 - better integratation of the mod with the newest version of the game
 
