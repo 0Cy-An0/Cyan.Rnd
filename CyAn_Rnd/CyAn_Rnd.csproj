@@ -23,7 +23,7 @@
 
     <PackageReference Include="RiskOfRain2.GameLibs" Version="1.5.0-r.1" />
 
-    <PackageReference Include="RoR2BepInExPack" Version="1.46.0" />
+    <PackageReference Include="RoR2BepInExPack" Version="1.48.0" />
 
     <PackageReference Include="UnityEngine.Modules" Version="6000.2.5" IncludeAssets="compile" />
   </ItemGroup>

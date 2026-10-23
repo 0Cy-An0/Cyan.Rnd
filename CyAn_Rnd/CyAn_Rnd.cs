@@ -1151,7 +1151,7 @@ namespace CyAn_Rnd
             NetworkServer.Spawn(obj); //this should sync the object to all
         }
 
-        private void Update()
+        /*private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
             {
@@ -1181,7 +1181,7 @@ namespace CyAn_Rnd
             // Instantiate the portal prefab at the specified position
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
-        }
+        }*/
 
         public static Sprite LoadEmbeddedSprite(string resourceName)
         {
