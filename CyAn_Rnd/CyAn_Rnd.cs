@@ -15,6 +15,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.Networking;
+using static RoR2.CharacterMasterNotificationQueue;
 
 namespace CyAn_Rnd
 {
@@ -30,7 +31,7 @@ namespace CyAn_Rnd
         public const string PluginGUID = "Cyan.Rnd";
         public const string PluginAuthor = "Cy/an";
         public const string PluginName = "Cy/an Rnd";
-        public const string PluginVersion = "1.2.5";
+        public const string PluginVersion = "1.3.0";
 
         //shopPortal is not neccessary anymore but ill leave it to reuse use when testing
         public static GameObject shopPortalPrefab;
@@ -49,6 +50,18 @@ namespace CyAn_Rnd
         public static bool preventDrops = false;
         //Option to specifically deal with lunar items when 'preventDrops' is enabled
         public static bool preventLunar = false;
+        //Option for Fast start
+        public static bool fastStart = false;
+        //What stage fast start should start on
+        public static int fastStartStage = 6;
+        //How many items fast start starts you with
+        public static int fastStartWhites = 55;
+        public static int fastStartGreens = 12;
+        public static int fastStartReds = 3;
+        //How many minutes the game starts with
+        public static int fastStartTime = 30;
+        //Fast start is true and needs to be done once; because we should not give items immediatly so this intermidate is used for the delay
+        private static bool fastStartPending = false;
         //Need a way to keep track if properSave was used. (relevant in 'ResetRunVars')
         public static bool wasLoaded = false;
         //current PlayerCounter for item distribution
@@ -86,6 +99,7 @@ namespace CyAn_Rnd
             On.RoR2.CharacterMasterNotificationQueue.PushItemNotification_CharacterMaster_ItemIndex += OrderNotificationOverwrite;
             On.RoR2.CharacterMasterNotificationQueue.PushEquipmentNotification += OrderNotificationOverwrite2;
             On.RoR2.PickupDropletController.CreatePickup += OrderDropletOverwrite;
+            CharacterMaster.onStartGlobal += GiveFastStartItemsToPlayer;
 
             // Register Artifact of Order
             AddArtifact(new ArtifactOfOrder());
@@ -133,7 +147,7 @@ namespace CyAn_Rnd
                     CyAn_Arena.latestInventoryItems,
                     CyAn_Arena.arenaCount,
                     currentPlayer,
-                    ArtifactOfOrder.tierToItemMap.Select(kvp => new KeyValuePair<int, int>((int)kvp.Key, (int)kvp.Value)).ToList(),
+                    ArtifactOfOrder.tierToItemMap.SelectMany(kvp => new[] { (int)kvp.Key, (int)kvp.Value }).ToArray(),
                     (int)ArtifactOfOrder.allowedEquipment
                 ];
 
@@ -154,8 +168,8 @@ namespace CyAn_Rnd
                     //So apparently ProperSaves loads saved int[] as object (which i kinda had to figure out via Consol Logs, because i am stupid) so here is a conversion, that i defintily came up with my self and did not ask chatGpt for
                     try
                     {
-                        // Casts loadedData[0](object) to List<object> and converts this to int[](by casting it to List<int> and then converting to array._.) because of course i can't just cast to (int[])
-                        CyAn_Arena.latestInventoryItems = [.. ((List<object>)loadedData[0]).Cast<int>()];
+                        // Casts loadedData[0] int[]
+                        CyAn_Arena.latestInventoryItems = (int[])loadedData[0];
                     }
                     catch (Exception ex)
                     {
@@ -168,15 +182,20 @@ namespace CyAn_Rnd
 
                     try
                     {
-                        List<object> rawList = (List<object>)loadedData[3];
+                        //restored flattened dictonary
+                        int[] rawList = (int[])loadedData[3];
 
-                        ArtifactOfOrder.tierToItemMap = rawList.Select(obj =>
-                            {
-                                var dict = (Dictionary<string, object>)obj;
-                                int key = Convert.ToInt32(dict["Key"]);
-                                int value = Convert.ToInt32(dict["Value"]);
-                                return new KeyValuePair<ItemTier, ItemIndex>((ItemTier)key, (ItemIndex)value);
-                            }).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                        var map = new Dictionary<ItemTier, ItemIndex>();
+
+                        for (int i = 0; i + 1 < rawList.Length; i += 2)
+                        {
+                            ItemTier tier = (ItemTier)rawList[i];
+                            ItemIndex item = (ItemIndex)rawList[i + 1];
+
+                            map[tier] = item;
+                        }
+
+                        ArtifactOfOrder.tierToItemMap = map;
                     }
                     catch (Exception ex)
                     {
@@ -186,7 +205,11 @@ namespace CyAn_Rnd
                     ArtifactOfOrder.allowedEquipment = (EquipmentIndex) Convert.ToInt32(loadedData[4]);
 
                     Log.Info($"Loaded latestInventoryItems, arenaCount({CyAn_Arena.arenaCount}) and currentPlayer({currentPlayer}) with ProperSave.");
-                    Log.Info($"[Artifact of Order] Chosen allowed equipment: {Language.GetString(EquipmentCatalog.GetEquipmentDef(ArtifactOfOrder.allowedEquipment).nameToken)}");
+                    if (ArtifactOfOrder.orderActive)
+                    {
+                        Log.Info($"[Artifact of Order] Chosen allowed equipment: {Language.GetString(EquipmentCatalog.GetEquipmentDef(ArtifactOfOrder.allowedEquipment).nameToken)}");
+                    }
+                    
                     foreach (var kvp in ArtifactOfOrder.tierToItemMap)
                     {
                         var itemDef = ItemCatalog.GetItemDef(kvp.Value);
@@ -301,6 +324,48 @@ namespace CyAn_Rnd
                     null
                 ),
                 (
+                    Config.Bind("General", "fast Start", false, "Enable starting with an amount of random items and on an advanced stage"),
+                    typeof(bool),
+                    new Action<object>(value => fastStart = (bool)value),
+                    null,
+                    null
+                ),
+                (
+                    Config.Bind("General", "fast Start stage", 6, "The stage fast start starts at"),
+                    typeof(int),
+                    new Action<object>(value => fastStartStage = (int)value),
+                    0,
+                    1000
+                ),
+                (
+                    Config.Bind("General", "fast Start Whites", 55, "How many white items fast starts starts you with"),
+                    typeof(int),
+                    new Action<object>(value => fastStartWhites = (int)value),
+                    0,
+                    10000
+                ),
+                (
+                    Config.Bind("General", "fast Start Greens", 13, "How many green items fast starts starts you with"),
+                    typeof(int),
+                    new Action<object>(value => fastStartGreens = (int)value),
+                    0,
+                    10000
+                ),
+                (
+                    Config.Bind("General", "fast Start Reds", 2, "How many red items fast starts starts you with"),
+                    typeof(int),
+                    new Action<object>(value => fastStartReds = (int)value),
+                    0,
+                    10000
+                ),
+                (
+                    Config.Bind("General", "fast Start time", 30, "How much time should be added on the timer to start with when fast start is enabled (in minutes)"),
+                    typeof(int),
+                    new Action<object>(value => fastStartTime = (int)value),
+                    0,
+                    10000
+                ),
+                (
                     null,
                     typeof(RiskOfOptions.Options.GenericButtonOption),
                     new Action<object>(_ => CheatUnlockAllItemsAndSurvivors()),
@@ -308,7 +373,7 @@ namespace CyAn_Rnd
                     "General"
                 ),
                 (
-                    Config.Bind("Void Fields", "Use Shrines", false, "If enabled, will spawn a unusable teleporter in the void fields to activate mountainShrines instead of just an internal counter\nAny use of the difficulty counter is replaced by the current active mountain Shrines\nThis Option will probably do nothing if you do not have other mods that interact with mountain shrines, i reccomend looking for one that makes them persist over the whole run after activiating"),
+                    Config.Bind("Void Fields", "Use Shrines", false, "If enabled, will use the internal counter of the artifact of prestige to scale difficulty/scale it higher too; Will not effect the very first unmodified entry of the void fields"),
                     typeof(bool),
                     new Action<object>(value => CyAn_Arena.useShrine = (bool)value),
                     null,
@@ -553,7 +618,7 @@ namespace CyAn_Rnd
                     1f
                 ),
                 (
-                    Config.Bind("Void Fields", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type.\nWill also add all Equipment at the same time\nVoid field rewards are now only lunar items(idk why). Items/Equipment may not show up in the listing but are still present\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON"),
+                    Config.Bind("Void Fields", "Kill Me", false, "If enabled, enemies gain one of every item type instead of a single item type. Items do not show up in the listing but are still present\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON\nTHIS OPTION HAS A SPECIFIC NAME FOR A REASON"),
                     typeof(bool),
                     new Action<object>(value => CyAn_Arena.KillMeOption = (bool)value),
                     null, //a bool option does not need a min/max [should be somewhat obvious i guess]
@@ -832,14 +897,73 @@ namespace CyAn_Rnd
         {
             if (wasLoaded)
             {
-                //making sure wasLoaded is set to fals only after the normal run start; so that other run starts can check on this
+                //making sure wasLoaded is set to false only after the normal run start; so that other run starts can check on this
                 orig(self);
                 wasLoaded = false;
                 return;
             }
             CyAn_Arena.latestInventoryItems = [];
             CyAn_Arena.arenaCount = -1;
+            fastStartPending = fastStart;
+
             orig(self);
+
+            if (fastStartPending)
+            {
+                ApplyFastStart(self);
+            }
+        }
+
+        private static void ApplyFastStart(Run run)
+        {
+            if (!NetworkServer.active)
+                return;
+
+            run.stageClearCount = Mathf.Clamp(fastStartStage - 1, 0, 1000);
+
+            run.SetRunStopwatch(fastStartTime * 60);
+        }
+
+        private static void GiveFastStartItemsToPlayer(CharacterMaster master)
+        {
+            if (!fastStartPending || master.teamIndex != TeamIndex.Player)
+                return;
+
+            var inventory = master.inventory;
+            if (inventory == null)
+                return;
+
+            fastStartPending = false;
+            Run run = Run.instance;
+
+            GiveItemsFromTier(inventory, run.availableTier1DropList, fastStartWhites);
+            GiveItemsFromTier(inventory, run.availableTier2DropList, fastStartGreens);
+            GiveItemsFromTier(inventory, run.availableTier3DropList, fastStartReds);
+        }
+
+        private static void GiveItemsFromTier(Inventory inventory, List<PickupIndex> dropList, int count)
+        {
+            if (inventory == null || dropList == null || dropList.Count == 0)
+                return;
+
+            var run = Run.instance;
+            if (run == null)
+                return;
+
+            for (int i = 0; i < count; i++)
+            {
+                int index = run.treasureRng.RangeInt(0, dropList.Count);
+                PickupIndex pickup = dropList[index];
+
+                if (!pickup.isValid)
+                    continue;
+
+                PickupDef pickupDef = PickupCatalog.GetPickupDef(pickup);
+                if (pickupDef == null || pickupDef.itemIndex == ItemIndex.None)
+                    continue;
+
+                inventory.GiveItemPermanent(pickupDef.itemIndex, 1);
+            }
         }
 
         private IEnumerator CheckTeleporterInstance(On.RoR2.Stage.orig_Start orig, Stage self)
@@ -1017,8 +1141,8 @@ namespace CyAn_Rnd
             {
                 return;
             }
-            
-            CharacterMasterNotificationQueue.PushItemNotification(localPlayer.master, item);
+
+            CharacterMasterNotificationQueue.PushItemNotification(new PushItemNotificationArgs { characterMaster = localPlayer.master, itemIndex = item, isTemporary = false, upgradeCount = 0 });
         }
 
         [Server]
@@ -1027,7 +1151,7 @@ namespace CyAn_Rnd
             NetworkServer.Spawn(obj); //this should sync the object to all
         }
 
-        /*private void Update()
+        private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
             {
@@ -1057,7 +1181,7 @@ namespace CyAn_Rnd
             // Instantiate the portal prefab at the specified position
             GameObject portal = Instantiate(raidPortalPrefab, position + new Vector3(5, 0, 0), Quaternion.identity);
             GameObject portal2 = Instantiate(shopPortalPrefab, position + new Vector3(-5, 0, 0), Quaternion.identity);
-        }*/
+        }
 
         public static Sprite LoadEmbeddedSprite(string resourceName)
         {

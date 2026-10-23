@@ -108,17 +108,17 @@ namespace CyAn_Rnd
                     }
                     else
                     {
-                        Log.Info("Error 3");
+                        Log.Info("Artifact of Order pickupDef not valid");
                     }
                 }
                 else
                 {
-                    Log.Info("Error 2");
+                    Log.Info("Artifact of Order equipmentDef is null");
                 }
             }
             else
             {
-                Log.Info("Error 1");
+                Log.Info("Artifact of Order EquipmentIndex is None");
             }
 
             if (!CyAn_Rnd.wasLoaded)
@@ -242,21 +242,33 @@ namespace CyAn_Rnd
             if (allowedEquipment != EquipmentIndex.None)
             {
                 int slotCount = inventory.GetEquipmentSlotCount();
+                int setCount = inventory.GetEquipmentSetCount();
 
                 for (uint slot = 0; slot < slotCount; slot++)
                 {
-                    EquipmentDef currentEquipmentDef = EquipmentCatalog.GetEquipmentDef(inventory.GetActiveEquipment().equipmentIndex);
-
-                    if (currentEquipmentDef != null && inventory.GetActiveEquipment().equipmentIndex != allowedEquipment)
+                    for (uint set = 0; set < setCount; set++)
                     {
-                        Log.Info($"Replacing equipment: {currentEquipmentDef.name} with {EquipmentCatalog.GetEquipmentDef(allowedEquipment).name}");
-                        inventory.SetEquipmentIndex(allowedEquipment, false);
+                        var location = new EquipmentLocation
+                        {
+                            slot = slot,
+                            set = set
+                        };
+
+                        EquipmentIndex currentEquipment = inventory.GetEquipment(location).equipmentIndex;
+
+                        if (currentEquipment != allowedEquipment)
+                        {
+                            EquipmentDef currentDef = EquipmentCatalog.GetEquipmentDef(currentEquipment);
+                            EquipmentDef allowedDef = EquipmentCatalog.GetEquipmentDef(allowedEquipment);
+
+                            Log.Info($"Replacing equipment in slot {slot}, set {set}: " + $"{currentDef?.name} with {allowedDef?.name}");
+
+                            inventory.SetEquipmentIndex(allowedEquipment, location);
+                        }
                     }
                 }
             }
-
             isEnforcingRestrictions = false;
         }
-
     }
 }
